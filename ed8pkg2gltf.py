@@ -814,6 +814,10 @@ def process_cluster_instance_list_header(cluster_instance_list_header, g, count_
      'PNode',
      'PNodeContext',
      'PParameterBuffer',
+     'PPhysicsMaterial',
+     'PPhysicsMesh',
+     'PPhysicsModel',
+     'PPhysicsRigidBody',
      'PSamplerState',
      'PSceneRenderPass',
      'PShader',
@@ -827,6 +831,7 @@ def process_cluster_instance_list_header(cluster_instance_list_header, g, count_
      'PShaderPassInfo',
      'PShaderStreamDefinition',
      'PShaderVertexProgram',
+     'PShape',
      'PSkeletonJointBounds',
      'PSkinBoneRemap',
      'PString',
@@ -2186,6 +2191,7 @@ def render_mesh(g, cluster_mesh_info, cluster_info, cluster_header, pkg_name='',
             if has_key == True:
                 for v in cluster_mesh_info.data_instances_by_class[k]:
                     load_shader_parameters(g, v, cluster_header)
+                    pass
 
     clsuter_basename_noext = cluster_mesh_info.filename.split('.', 1)[0]
     if 'PMaterial' in cluster_mesh_info.data_instances_by_class:
@@ -2353,9 +2359,11 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
     # Use the presence of metadata files to determine which .dae asset we are processing
     if item_num == 0:
         metadata_json_name = pkg_name + "/metadata.json" # First file will be metadata.json
+        physics_json_name = pkg_name + "/physics_data.json" # First file will be metadata.json
         mesh_folder_name = pkg_name + "/meshes"
     else:
         metadata_json_name = pkg_name + "/metadata_{0}.json".format(str(item_num).zfill(2))
+        physics_json_name = pkg_name + "/physics_data_{0}.json".format(str(item_num).zfill(2))
         mesh_folder_name = pkg_name + "/meshes_{0}".format(str(item_num).zfill(2))
     metadata_json = {'name': cluster_mesh_info.filename.split('.', 1)[0], 'pkg_name': pkg_name}
     if not os.path.exists(mesh_folder_name):
@@ -3262,6 +3270,31 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
 
     if 'PLocator' in cluster_mesh_info.data_instances_by_class:
         metadata_json['locators'] = [x['mu_name'] for x in cluster_mesh_info.data_instances_by_class['PLocator']]
+
+    if 'PPhysicsModel' in cluster_mesh_info.data_instances_by_class:
+        def ok_json(obj):
+            try:
+                json.dumps(obj)
+                return True
+            except:
+                return False
+        physics_data = {}
+        to_process = ['PPhysicsModel', 'PPhysicsMaterial', 'PPhysicsMesh', 'PPhysicsRigidBody', 'PShape']
+        for section in to_process:
+            if section in cluster_mesh_info.data_instances_by_class:
+                physics_data[section] =[]
+                for v in cluster_mesh_info.data_instances_by_class[section]:
+                    data_dict = {item:v[item] if not isinstance(v[item],dict)\
+                        else list(v[item]['m_elements']) if 'm_elements' in v[item]\
+                        else v[item]['m_name'] if 'm_name' in v[item]\
+                        else v[item]['mu_name'] if 'mu_name' in v[item]\
+                        else v[item]['mu_memberLoc'] if 'mu_memberLoc' in v[item]\
+                        else [{'mu_memberClass': x['mu_memberClass'], 'mu_memberLoc': x['mu_memberLoc']} for x in v[item]['m_u']] if 'm_u' in v[item]\
+                        else v[item] if ok_json(v[item]) == True\
+                        else 'unreadable' for item in v}
+                    physics_data[section].append(data_dict)
+        with open(physics_json_name, 'wb') as f:
+            f.write(json.dumps(physics_data, indent=4).encode("utf-8"))
 
     if len(nodes) > 0:
         import json, base64
