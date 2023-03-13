@@ -3111,16 +3111,20 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
 
     cluster_mesh_info.gltf_data['nodes'] = nodes
     skins = []
+    inv_bind_mtxs = {}
     if 'PMeshInstance' in cluster_mesh_info.data_instances_by_class:
         for v in cluster_mesh_info.data_instances_by_class['PMeshInstance']:
             mesh = v['m_mesh']
             joint_list = [mesh['m_skeletonBounds'][i]['m_hierarchyMatrixIndex'] for i in range(len(mesh['m_skeletonBounds']))]
             joint_list_to_node = {}
             matrices = {}
+            matrices_by_name = {}
             for j in range(len(joint_list)):
                 joint_list_to_node[joint_list[j]] = [i for i in range(len(nodes)) if nodes[i]['name'] == mesh['m_matrixNames'][joint_list[j]]['m_buffer']][0]
                 matrices[joint_list[j]] = mesh['m_skeletonMatrices'][j]['m_elements']
+                matrices_by_name[mesh['m_matrixNames'][joint_list[j]]['m_buffer']] = mesh['m_skeletonMatrices'][j]['m_elements']
             if len(mesh_segment_nodes) > 0:
+                inv_bind_mtxs[v['mu_name']] = {k:list(v) for (k,v) in matrices_by_name.items()}
                 mesh_nodes = {}
                 remapped_vgmap_list = {nodes[joint_list_to_node[joint_list[j]]]['name']:j for j in range(len(joint_list))}
                 for i in range(len(mesh_segment_nodes)):
@@ -3187,6 +3191,12 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
                     skins.append(skin)
 
     cluster_mesh_info.gltf_data['skins'] = skins
+
+    for i in range(len(metadata_json['heirarchy'])):
+        for mesh in inv_bind_mtxs:
+            if metadata_json['heirarchy'][i]['name'] in list(inv_bind_mtxs[mesh].keys()):
+                metadata_json['heirarchy'][i][mesh+'_imtx'] = inv_bind_mtxs[mesh][metadata_json['heirarchy'][i]['name']]
+
     animations = []
     targetMap = {'Translation': 'translation', 
      'Rotation': 'rotation', 
