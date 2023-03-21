@@ -7,7 +7,7 @@ The original phyre asset decompiler is written by Julian Uy (github.com/uyjulian
 
 ## Requirements:
 1. Python 3.9 or newer is required for use of this script.  It is free from the Microsoft Store, for Windows users.  For Linux users, please consult your distro.
-2. The zstandard module for python is needed for decompiling zstandard-compressed pkgs.  Use of the glTF mesh exporter additionally requires numpy, pyquaternion and pygltflib.  Install all of these by running the included install_python_modules.bat or by typing "python3 -m pip install zstandard numpy pyquaternion pygltflib" in the command line / shell.
+2. The zstandard module for python is needed for decompiling zstandard-compressed pkgs.  The lz4 module is used for compressing compiled .pkgs.  Use of the glTF mesh exporter additionally requires numpy, pyquaternion and pygltflib.  Install all of these by running the included install_python_modules.bat or by typing "python3 -m pip install zstandard numpy pyquaternion pygltflib" in the command line / shell.
 3. The output can be imported into Blender using DarkStarSword's amazing plugin: https://github.com/DarkStarSword/3d-fixes/blob/master/blender_3dmigoto.py
 4. Compilation is dependent on the phyre Engine tools from [here](https://github.com/Trails-Research-Group/Doc/releases/download/v0.0/WorkFolder.zip), as described on the [tutorial from the Trails-Research-Group](https://github.com/Trails-Research-Group/Doc/wiki/How-to:-Import-custom-models-to-Cold-Steel-IV).  (You do not need the tutorial for basic mods, just the tools.)  The tools require [the Windows SDK](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/).
 
@@ -44,10 +44,12 @@ For this step, put build_collada.py, lib_fmtibvb.py, replace_shader_references.p
 
 ## Notes
 
-** Weight Painting**
+**Weight Painting:**
+
 If you would like to weight paint the meshes, you will want to parent to the armature so you can see the results of your painting in Blender.  Import your raw meshes **and** the glTF.  Delete all the meshes from the glTF.  Select all your raw buffers in object mode, then shift-click on the bones (or ctrl-click up_point in the outliner window).  Go to Object menu -> Parent -> Armature Deform (do not select any of the "With" options).  Your meshes are now parented, but still can be exported as .fmt/.ib/.vb.  Note that this is necessary to keep all the original data of the buffers, since the glTF meshes are missing a lot of data and also cannot be exported directly as .fmt/.ib/.vb.  If you want to work with the glTF meshs without going through this parenting process, you can use the glTF extractor (see below).
 
 **Command line arguments for ed8pkg2gltf.py:**
+
 `ed8pkg2gltf.py [-h] [-p] [-o] pkg_filename`
 
 `-h, --help`

@@ -4,7 +4,7 @@
 #
 # GitHub eArmada8/ed8pkg2gltf
 
-import json, numpy, os, io, struct, sys, glob
+import json, numpy, os, io, struct, sys, glob, re
 from pygltflib import GLTF2
 from pyquaternion import Quaternion
 from lib_fmtibvb import *
@@ -228,6 +228,22 @@ def image_list (material_struct):
         image_list.extend([v['uri'] for (k,v) in texture.items()])
     return([{'uri': x} for x in list(set(image_list))])
 
+def load_heirarchy_matrices (gltf, heirarchy):
+    skin_nodes = [x for x in gltf.nodes if x.skin is not None]
+    for skin_node in skin_nodes:
+        #Strip off the suffix that was inserted by ed8pkg2gltf
+        if len(re.findall('_[0-9][0-9]$', gltf.meshes[skin_node.mesh].name)) > 0:
+            strip = True
+        else:
+            meshname = gltf.meshes[skin_node.mesh].name
+        invmtx = {k:v for (k,v) in zip(gltf.skins[skin_node.skin].joints, read_stream(gltf,gltf.skins[skin_node.skin].inverseBindMatrices))}
+        for i in range(len(heirarchy)):
+            if i in invmtx.keys():
+                heirarchy[i][gltf.meshes[skin_node.mesh].name+'_imtx'] = invmtx[i]
+                if strip == True:
+                    heirarchy[i][gltf.meshes[skin_node.mesh].name[:-3]+'_imtx'] = invmtx[i]
+    return (heirarchy)
+
 def process_gltf(filename, complete_maps = complete_vgmaps_default, overwrite = False):
     print("Processing {0}...".format(filename))
     gltf = GLTF2().load(filename)
@@ -242,6 +258,7 @@ def process_gltf(filename, complete_maps = complete_vgmaps_default, overwrite = 
             os.mkdir(model_name + '/meshes')
         with open(filename, 'rb') as f:
             heirarchy = json.loads(f.read())['nodes']
+        heirarchy = load_heirarchy_matrices(gltf, heirarchy)
         joint_nodes = [gltf.nodes[i].name for i in list(set([x for y in [x.joints for x in gltf.skins] for x in y]))]
         locators = [x.name for x in gltf.nodes if x.mesh is None and x.skin is None and x.name not in joint_nodes]
         mesh_nodes = [x for x in gltf.nodes if x.mesh is not None]

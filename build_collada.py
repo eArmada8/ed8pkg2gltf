@@ -347,11 +347,12 @@ def add_bone_info (skeleton):
 
 # Ordered_list should be empty when calling
 def order_nodes_by_heirarchy (node, filter_list, skeleton, ordered_list = []):
-    if skeleton[node]['name'] in filter_list:
-        ordered_list.append(skeleton[node]['name'])
-    if 'children' in skeleton[node].keys():
-        for child in skeleton[node]['children']:
-            ordered_list = order_nodes_by_heirarchy (child, filter_list, skeleton, ordered_list)
+    if node < len(skeleton):
+        if skeleton[node]['name'] in filter_list:
+            ordered_list.append(skeleton[node]['name'])
+        if 'children' in skeleton[node].keys():
+            for child in skeleton[node]['children']:
+                ordered_list = order_nodes_by_heirarchy (child, filter_list, skeleton, ordered_list)
     return(ordered_list)
 
 # Needs to be ordered by heirarchy, phyre Engine seems very sensitive to this
@@ -449,6 +450,8 @@ def add_skeleton (collada, metadata):
 # Add geometries and skin them.  Needs a base node tree to build links to.
 def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has_skeleton = True):
     library_geometries = collada.find('library_geometries')
+    #Find mesh instances with saved inverted bind matrices
+    mesh_instances = list(set([x.split('_imtx')[0] for i in range(len(skeleton)) for x in skeleton[i].keys() if '_imtx' in x]))
     if has_skeleton == True:
         library_controllers = collada.find('library_controllers')
         library_visual_scenes = collada.find('library_visual_scenes')
@@ -461,6 +464,12 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has
         joint_list = get_joint_list(skeleton_id, [x for y in [x['vgmap'].keys() for x in submeshes] for x in y]+[skeleton_name], skeleton)
         bone_dict = get_bone_dict(skeleton)
     for submesh in submeshes:
+        if "_".join(submesh["name"].split("_")[:-1]) in mesh_instances:
+            meshname = "_".join(submesh["name"].split("_")[:-1])
+        elif "_".join(submesh["name"].split("_")[:-2]) in mesh_instances:
+            meshname = "_".join(submesh["name"].split("_")[:-2])
+        else:
+            meshname = submesh["name"]
         semantics_list = [x['SemanticName'] for x in submesh["vb"]]
         geometry = ET.SubElement(library_geometries, 'geometry')
         geometry.set("id", submesh['name'])
@@ -561,7 +570,10 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has
             inv_bind_mtx_array = ET.SubElement(inv_bind_mtx_source, 'float_array')
             inv_bind_mtx_array.set('id', submesh['name'] + '-skin-bind_poses-array')
             inv_bind_mtx_array.set('count', str(len(blendjoints) * 16))
-            inv_bind_mtx_array.text = " ".join(["{0}".format(x) for y in [skeleton[bone_dict[x]]['inv_matrix'].flatten('C')\
+            inv_bind_mtx_array.text = " ".join(["{0}".format(x) for y in\
+                [numpy.array([skeleton[bone_dict[x]][meshname+'_imtx'][0:4], skeleton[bone_dict[x]][meshname+'_imtx'][4:8],\
+                skeleton[bone_dict[x]][meshname+'_imtx'][8:12], skeleton[bone_dict[x]][meshname+'_imtx'][12:16]]).transpose().flatten('C')\
+                if meshname+'_imtx' in skeleton[bone_dict[x]].keys() else skeleton[bone_dict[x]]['inv_matrix'].flatten('C')\
                 for x in blendjoints.keys()] for x in y])
             technique_common = ET.SubElement(inv_bind_mtx_source, 'technique_common')
             accessor = ET.SubElement(technique_common, 'accessor')
@@ -651,20 +663,18 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has
         double_sided = ET.SubElement(technique, 'double_sided')
         double_sided.text = '1'
         # Create geometry node
-        meshname = "_".join(submesh["name"].split("_")[:-1])
-        if meshname == '':
-            meshname = submesh["name"]
         parent_node = [x for x in collada.iter() if 'sid' in x.attrib and x.attrib['sid'] == meshname]
-        if len(parent_node) > 0:
-            mesh_node = parent_node[0]
-        else:
-            mesh_node = add_empty_node (meshname, collada.find('library_visual_scenes')[0])
         if 'BLENDWEIGHTS' in semantics_list and 'BLENDINDICES' in semantics_list:
+            if len(parent_node) > 0:
+                mesh_node = parent_node[0]
+            else:
+                mesh_node = add_empty_node (meshname+'_node', collada.find('library_visual_scenes')[0])
             instance_geom_controller = ET.SubElement(mesh_node, 'instance_controller')
             instance_geom_controller.set('url', '#' + submesh["name"] + '-skin')
             controller_skeleton = ET.SubElement(instance_geom_controller, 'skeleton')
             controller_skeleton.text = '#' + skeleton_name # Should always be 'up_point' or its equivalent!
         else:
+            mesh_node = add_empty_node (meshname+'_node', collada.find('library_visual_scenes')[0])
             instance_geom_controller = ET.SubElement(mesh_node, 'instance_geometry')
             instance_geom_controller.set('url', '#' + submesh["name"])
         bind_material = ET.SubElement(instance_geom_controller, 'bind_material')
@@ -760,6 +770,12 @@ def write_asset_xml (metadata_list):
     already_appended = []
     asset_xml = '<?xml version="1.0" encoding="utf-8"?>\r\n<fassets>\r\n'
     for i in range(len(metadata_list)):
+        if metadata_list[i]['name'] in xml_info:
+            current_xml_asset = xml_info[metadata_list[i]['name']]['asset_symbol']
+            current_dae_path = xml_info[metadata_list[i]['name']]['dae_path']
+        else:
+            current_xml_asset = metadata_list[i]['pkg_name']
+            current_dae_path = xml_info[list(xml_info.keys())[0]]['dae_path'] # If asset does not exist, use first entry as it is likely the xml is a template
         images = []
         for j in range(len(metadata_list[i]['images'])):
             if metadata_list[i]['images'][j]['uri'] not in already_appended:
@@ -774,8 +790,8 @@ def write_asset_xml (metadata_list):
                     shaders.append('\t\t<cluster path="data/D3D11/{0}.phyre" type="p_fx" />\r\n'.format(shader_name))
                     already_appended.append(metadata_list[i]['materials'][material]['shader'])
         shaders.sort()
-        asset_xml += '\t<asset symbol="{0}">\r\n'.format(xml_info[metadata_list[i]['name']]['asset_symbol'])
-        asset_xml += '\t\t<cluster path="data/D3D11/{0}/{1}.dae.phyre" type="p_collada" />\r\n'.format(xml_info[metadata_list[i]['name']]['dae_path'], metadata_list[i]['name'])
+        asset_xml += '\t<asset symbol="{0}">\r\n'.format(current_xml_asset)
+        asset_xml += '\t\t<cluster path="data/D3D11/{0}/{1}.dae.phyre" type="p_collada" />\r\n'.format(current_dae_path, metadata_list[i]['name'])
         asset_xml += ''.join(images) + ''.join(shaders)
         asset_xml += '\t</asset>\r\n'
     asset_xml += '</fassets>\r\n'

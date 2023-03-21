@@ -2191,7 +2191,6 @@ def render_mesh(g, cluster_mesh_info, cluster_info, cluster_header, pkg_name='',
             if has_key == True:
                 for v in cluster_mesh_info.data_instances_by_class[k]:
                     load_shader_parameters(g, v, cluster_header)
-                    pass
 
     clsuter_basename_noext = cluster_mesh_info.filename.split('.', 1)[0]
     if 'PMaterial' in cluster_mesh_info.data_instances_by_class:
@@ -2956,13 +2955,13 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
                                             uvIndex = 5
                                         elif xx['m_nameHash'] == 41522:
                                             uvIndex = 4
-                                        elif xx['m_nameHash'] == 41521:
+                                        elif xx['m_nameHash'] == 41521 or xx['m_nameHash'] == 59967:
                                             uvIndex = 3
-                                        elif xx['m_nameHash'] == 41520:
+                                        elif xx['m_nameHash'] == 41520 or xx['m_nameHash'] == 59964:
                                             uvIndex = 2
-                                        elif xx['m_nameHash'] == 41519:
+                                        elif xx['m_nameHash'] == 41519 or xx['m_nameHash'] == 59961:
                                             uvIndex = 1
-                                        elif xx['m_nameHash'] == 21117 or xx['m_nameHash'] == 50588 or xx['m_nameHash'] == 41517:
+                                        elif xx['m_nameHash'] == 21117 or xx['m_nameHash'] == 50588 or xx['m_nameHash'] == 41517 or xx['m_nameHash'] == 59958:
                                             uvIndex = 0
                                         else:
                                             print('Unknown how to handle ' + xx['m_name'])
@@ -3189,13 +3188,14 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
                     if len(joints) > 0:
                         skin['joints'] = joints
                     skins.append(skin)
-
+    
     cluster_mesh_info.gltf_data['skins'] = skins
 
-    for i in range(len(metadata_json['heirarchy'])):
-        for mesh in inv_bind_mtxs:
-            if metadata_json['heirarchy'][i]['name'] in list(inv_bind_mtxs[mesh].keys()):
-                metadata_json['heirarchy'][i][mesh+'_imtx'] = inv_bind_mtxs[mesh][metadata_json['heirarchy'][i]['name']]
+    if 'heirarchy' in metadata_json:
+        for i in range(len(metadata_json['heirarchy'])):
+            for mesh in inv_bind_mtxs:
+                if metadata_json['heirarchy'][i]['name'] in list(inv_bind_mtxs[mesh].keys()):
+                    metadata_json['heirarchy'][i][mesh+'_imtx'] = inv_bind_mtxs[mesh][metadata_json['heirarchy'][i]['name']]
 
     animations = []
     targetMap = {'Translation': 'translation', 
