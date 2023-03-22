@@ -15,7 +15,7 @@ def basic_collada (has_skeleton = True):
     collada.set("version", "1.4.1")
     asset = ET.SubElement(collada, 'asset')
     asset_unit = ET.SubElement(asset, 'unit')
-    asset_unit.set("meter", "0.0099999997764825")
+    asset_unit.set("meter", "0.01")
     asset_unit.set("name", "centimeter")
     asset_up_axis = ET.SubElement(asset, 'up_axis')
     asset_up_axis.text = "Y_UP"
@@ -448,7 +448,7 @@ def add_skeleton (collada, metadata):
     return(collada)
 
 # Add geometries and skin them.  Needs a base node tree to build links to.
-def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has_skeleton = True):
+def add_geometries_and_controllers (collada, submeshes, skeleton, materials, node_skip = [], has_skeleton = True):
     library_geometries = collada.find('library_geometries')
     #Find mesh instances with saved inverted bind matrices
     mesh_instances = list(set([x.split('_imtx')[0] for i in range(len(skeleton)) for x in skeleton[i].keys() if '_imtx' in x]))
@@ -464,9 +464,9 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has
         joint_list = get_joint_list(skeleton_id, [x for y in [x['vgmap'].keys() for x in submeshes] for x in y]+[skeleton_name], skeleton)
         bone_dict = get_bone_dict(skeleton)
     for submesh in submeshes:
-        if "_".join(submesh["name"].split("_")[:-1]) in mesh_instances:
+        if "_".join(submesh["name"].split("_")[:-1]) in mesh_instances or "_".join(submesh["name"].split("_")[:-1]) in node_skip:
             meshname = "_".join(submesh["name"].split("_")[:-1])
-        elif "_".join(submesh["name"].split("_")[:-2]) in mesh_instances:
+        elif "_".join(submesh["name"].split("_")[:-2]) in mesh_instances or "_".join(submesh["name"].split("_")[:-2]) in node_skip:
             meshname = "_".join(submesh["name"].split("_")[:-2])
         else:
             meshname = submesh["name"]
@@ -662,53 +662,117 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has
         technique.set('profile', 'MAYA')
         double_sided = ET.SubElement(technique, 'double_sided')
         double_sided.text = '1'
-        # Create geometry node
-        parent_node = [x for x in collada.iter() if 'sid' in x.attrib and x.attrib['sid'] == meshname]
-        if 'BLENDWEIGHTS' in semantics_list and 'BLENDINDICES' in semantics_list:
-            if len(parent_node) > 0:
-                mesh_node = parent_node[0]
+        # Create geometry node if the meshname is not in the node_skip list (e.g. physics collision mesh)
+        if not meshname in node_skip:
+            parent_node = [x for x in collada.iter() if 'sid' in x.attrib and x.attrib['sid'] == meshname]
+            if 'BLENDWEIGHTS' in semantics_list and 'BLENDINDICES' in semantics_list:
+                if len(parent_node) > 0:
+                    mesh_node = parent_node[0]
+                else:
+                    mesh_node = add_empty_node (meshname+'_node', collada.find('library_visual_scenes')[0])
+                instance_geom_controller = ET.SubElement(mesh_node, 'instance_controller')
+                instance_geom_controller.set('url', '#' + submesh["name"] + '-skin')
+                controller_skeleton = ET.SubElement(instance_geom_controller, 'skeleton')
+                controller_skeleton.text = '#' + skeleton_name # Should always be 'up_point' or its equivalent!
             else:
                 mesh_node = add_empty_node (meshname+'_node', collada.find('library_visual_scenes')[0])
-            instance_geom_controller = ET.SubElement(mesh_node, 'instance_controller')
-            instance_geom_controller.set('url', '#' + submesh["name"] + '-skin')
-            controller_skeleton = ET.SubElement(instance_geom_controller, 'skeleton')
-            controller_skeleton.text = '#' + skeleton_name # Should always be 'up_point' or its equivalent!
-        else:
-            mesh_node = add_empty_node (meshname+'_node', collada.find('library_visual_scenes')[0])
-            instance_geom_controller = ET.SubElement(mesh_node, 'instance_geometry')
-            instance_geom_controller.set('url', '#' + submesh["name"])
-        bind_material = ET.SubElement(instance_geom_controller, 'bind_material')
-        technique_common = ET.SubElement(bind_material, 'technique_common')
-        instance_material = ET.SubElement(technique_common, 'instance_material')
-        instance_material.set('symbol', submesh['name'] + 'SG')
-        instance_material.set('target', '#' + submesh['material']['material'])
-        material = [v for (k,v) in materials.items() if k == submesh['material']['material']][0]
-        for parameter in material['shaderTextures']:
-            # Texture parameters - I think these are constant from texture to texture and model to model, variations are in the effects?
-            texture_name = material['shaderTextures'][parameter].replace('.DDS','.dds').split('/')[-1].split('.dds')[0]
-            bind = ET.SubElement(instance_material, 'bind')
-            bind.set("semantic", parameter)
-            bind.set("target", texture_name + '-lib/outColor')
-            extra = ET.SubElement(bind, 'extra')
+                instance_geom_controller = ET.SubElement(mesh_node, 'instance_geometry')
+                instance_geom_controller.set('url', '#' + submesh["name"])
+            bind_material = ET.SubElement(instance_geom_controller, 'bind_material')
+            technique_common = ET.SubElement(bind_material, 'technique_common')
+            instance_material = ET.SubElement(technique_common, 'instance_material')
+            instance_material.set('symbol', submesh['name'] + 'SG')
+            instance_material.set('target', '#' + submesh['material']['material'])
+            material = [v for (k,v) in materials.items() if k == submesh['material']['material']][0]
+            for parameter in material['shaderTextures']:
+                # Texture parameters - I think these are constant from texture to texture and model to model, variations are in the effects?
+                texture_name = material['shaderTextures'][parameter].replace('.DDS','.dds').split('/')[-1].split('.dds')[0]
+                bind = ET.SubElement(instance_material, 'bind')
+                bind.set("semantic", parameter)
+                bind.set("target", texture_name + '-lib/outColor')
+                extra = ET.SubElement(bind, 'extra')
+                technique = ET.SubElement(extra, 'technique')
+                technique.set('profile', 'PSSG')
+                param = ET.SubElement(technique, 'param')
+                param.set("name", parameter)
+            if 'uvmap' in submesh:
+                for i in range(len(submesh["uvmap"])):
+                    bind_vertex_input = ET.SubElement(instance_material, 'bind_vertex_input')
+                    bind_vertex_input.set('semantic', "TEX{0}".format(submesh["uvmap"][i]['m_index']))
+                    bind_vertex_input.set('input_semantic', "TEXCOORD")
+                    bind_vertex_input.set('input_set', "{0}".format(submesh["uvmap"][i]['m_inputSet']))
+            extra = ET.SubElement(instance_geom_controller, 'extra')
             technique = ET.SubElement(extra, 'technique')
-            technique.set('profile', 'PSSG')
-            param = ET.SubElement(technique, 'param')
-            param.set("name", parameter)
-        if 'uvmap' in submesh:
-            for i in range(len(submesh["uvmap"])):
-                bind_vertex_input = ET.SubElement(instance_material, 'bind_vertex_input')
-                bind_vertex_input.set('semantic', "TEX{0}".format(submesh["uvmap"][i]['m_index']))
-                bind_vertex_input.set('input_semantic', "TEXCOORD")
-                bind_vertex_input.set('input_set', "{0}".format(submesh["uvmap"][i]['m_inputSet']))
-        extra = ET.SubElement(instance_geom_controller, 'extra')
-        technique = ET.SubElement(extra, 'technique')
-        technique.set('profile', 'PHYRE')
-        object_render_properties = ET.SubElement(technique, 'object_render_properties')
-        object_render_properties.set('castsShadows', '1')
-        object_render_properties.set('receiveShadows', '1')
-        object_render_properties.set('visibleInReflections', '1')
-        object_render_properties.set('visibleInRefractions', '1')
-        object_render_properties.set('motionBlurEnabled', '1')
+            technique.set('profile', 'PHYRE')
+            object_render_properties = ET.SubElement(technique, 'object_render_properties')
+            object_render_properties.set('castsShadows', '1')
+            object_render_properties.set('receiveShadows', '1')
+            object_render_properties.set('visibleInReflections', '1')
+            object_render_properties.set('visibleInRefractions', '1')
+            object_render_properties.set('motionBlurEnabled', '1')
+    return(collada)
+
+def add_physics (collada, physics_metadata):
+    import numpy
+    from pyquaternion import Quaternion
+    library_geometries = collada.find('library_geometries')
+    physics_materials = physics_metadata['PPhysicsMaterial']
+    library_physics_scenes = collada.find('library_physics_scenes')
+    physics_scene = library_physics_scenes.find('physics_scene')
+    library_physics_materials = ET.SubElement(collada, 'library_physics_materials')
+    for i in range(len(physics_materials)):
+        physics_material_element = ET.SubElement(library_physics_materials, 'physics_material')
+        physics_material_element.set("id", "PPhysicsMaterial_{0}".format(physics_materials[i]['mu_memberLoc']))
+        physics_material_element.set("name", "PPhysicsMaterial_{0}".format(physics_materials[i]['mu_memberLoc']))
+        technique_common = ET.SubElement(physics_material_element, 'technique_common')
+        dynamic_friction = ET.SubElement(technique_common, 'dynamic_friction')
+        dynamic_friction.text = "{0}".format(physics_materials[i]['m_dynamicFriction'])
+        static_friction = ET.SubElement(technique_common, 'static_friction')
+        static_friction.text = "{0}".format(physics_materials[i]['m_staticFriction'])
+        restitution = ET.SubElement(technique_common, 'restitution')
+        restitution.text = "{0}".format(physics_materials[i]['m_restitution'])
+    physics_models = physics_metadata['PPhysicsModel']
+    library_physics_models = ET.SubElement(collada, 'library_physics_models')
+    for i in range(len(physics_models)):
+        physics_model_element = ET.SubElement(library_physics_models, 'physics_model')
+        physics_model_element.set("id", "PPhysicsModel_{0}".format(physics_models[i]['mu_memberLoc']))
+        physics_model_element.set("name", "PPhysicsModel_{0}".format(physics_models[i]['mu_memberLoc']))
+        instance_physics_model = ET.SubElement(physics_scene, 'instance_physics_model')
+        instance_physics_model.set('url', '#' + "PPhysicsModel_{0}".format(physics_models[i]['mu_memberLoc']))
+        physics_rigid_bodies = [x for x in physics_metadata['PPhysicsRigidBody'] if x['m_model'] == physics_models[i]['mu_memberLoc']]
+        for j in range(len(physics_rigid_bodies)):
+            physics_rigid_body = ET.SubElement(physics_model_element, 'rigid_body') 
+            physics_rigid_body.set("id", physics_rigid_bodies[j]['mu_name'])
+            physics_rigid_body.set("name", physics_rigid_bodies[j]['mu_name'])
+            technique_common = ET.SubElement(physics_rigid_body, 'technique_common') 
+            mass = ET.SubElement(technique_common, 'mass')
+            mass.text = "{0}".format(physics_rigid_bodies[j]['m_mass'])
+            mass_frame = ET.SubElement(technique_common, 'mass_frame')
+            mfmtx = physics_rigid_bodies[j]['m_massFrameTransform']
+            mass_frame_matrix = numpy.array([[mfmtx[3],mfmtx[7],mfmtx[11],0], mfmtx[0:3]+[0], mfmtx[4:7]+[0], mfmtx[8:11]+[1]])
+            translate = ET.SubElement(mass_frame, 'translate')
+            translate.text = " ".join([str(x) for x in mass_frame_matrix[3][0:3]])
+            rotate = ET.SubElement(mass_frame, 'rotate')
+            rotate_q = Quaternion(matrix=mass_frame_matrix.transpose())
+            rotate.text = " ".join([str(x) for x in list(rotate_q.axis) + [rotate_q.degrees]])
+            instance_physics_material = ET.SubElement(technique_common, 'instance_physics_material')
+            instance_physics_material.set('url', "#PPhysicsMaterial_{0}".format(physics_rigid_bodies[j]['m_material']))
+            for k in range(len(physics_rigid_bodies[j]['m_shapes'])):
+                physics_mesh = [x for x in physics_metadata['PPhysicsMesh']\
+                    if x['mu_memberLoc'] == physics_rigid_bodies[j]['m_shapes'][k]['mu_memberLoc']][0]
+                shape = ET.SubElement(technique_common, 'shape')
+                hollow = ET.SubElement(shape, 'hollow')
+                hollow.text = str(physics_mesh['m_hollow']).lower()
+                mass = ET.SubElement(shape, 'mass')
+                mass.text = "{0}".format(physics_mesh['m_mass'])
+                density = ET.SubElement(shape, 'density')
+                density.text = "{0}".format(physics_mesh['m_density'])
+                # Strange that the geometry is inside the shape in collada, but inside the rigid body in phyre?
+                geometries = [x.attrib['id'] for x in library_geometries.findall('geometry')\
+                    if physics_rigid_bodies[j]['m_targetNode'] in x.attrib['id']]
+                for l in range(len(geometries)):
+                    instance_geometry = ET.SubElement(shape, 'instance_geometry')
+                    instance_geometry.set('url', "#{0}".format(geometries[l]))
     return(collada)
 
 def write_shader (materials_list):
@@ -831,6 +895,13 @@ def build_collada(metadata_name):
             if metadata['name'] in xml_info:
                 dae_path = xml_info[metadata['name']]['dae_path']
         relative_path = '/'.join(['..' for x in range(len(dae_path.split('/')))])
+        node_skip = []
+        physics_present = False
+        if os.path.exists(metadata_name.replace('metadata','physics_data')):
+            print("Physics data found.")
+            physics_metadata = read_struct_from_json(metadata_name.replace('metadata','physics_data'))
+            node_skip = [x['m_shape'].replace('Shape-PhysicsShape','') for x in physics_metadata['PPhysicsMesh']]
+            physics_present = True
         meshes_path = 'meshes' + metadata_name.split('.json')[0].split('metadata')[-1]
         submeshes = []
         meshes = [x.split(meshes_path+'\\')[1].split('.fmt')[0] for x in glob.glob(meshes_path+'/*.fmt')]
@@ -862,7 +933,11 @@ def build_collada(metadata_name):
         skeleton = add_bone_info(metadata['heirarchy'])
         collada = add_skeleton(collada, metadata)
         print("Adding geometry...")
-        collada = add_geometries_and_controllers(collada, submeshes, skeleton, metadata['materials'], has_skeleton = has_skeleton)
+        collada = add_geometries_and_controllers(collada, submeshes, skeleton,\
+            metadata['materials'], node_skip = node_skip, has_skeleton = has_skeleton)
+        if physics_present == True:
+            print("Adding collision...")
+            collada = add_physics(collada, physics_metadata)
         print("Writing COLLADA file...")
         with io.BytesIO() as f:
             f.write(ET.tostring(collada, encoding='utf-8', xml_declaration=True))
