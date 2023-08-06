@@ -2777,7 +2777,7 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
     materials_struct = {}
     if 'PMaterial' in cluster_mesh_info.data_instances_by_class:
         filter_map = ['NEAREST', 'LINEAR', 'NEAREST_MIPMAP_NEAREST', 'LINEAR_MIPMAP_NEAREST', 'NEAREST_MIPMAP_LINEAR', 'LINEAR_MIPMAP_LINEAR']
-        wrap_map = ['CLAMP','WRAP','CLAMP','CLAMP','MIRROR']
+        wrap_map = ['CLAMP','REPEAT','CLAMP_TO_EDGE','CLAMP_TO_BORDER','MIRROR']
         for v in cluster_mesh_info.data_instances_by_class['PMaterial']:
             material = {}
             material['name'] = v['mu_materialname']
