@@ -2175,9 +2175,8 @@ def render_mesh(g, cluster_mesh_info, cluster_info, cluster_header, pkg_name='',
 
     if 'PAssetReferenceImport' in cluster_mesh_info.data_instances_by_class:
         for v in cluster_mesh_info.data_instances_by_class['PAssetReferenceImport']:
-            if not v['m_targetAssetType'] == 'PTexture2D':
-                if v['m_targetAssetType'] == 'PTextureCubeMap':
-                    pass
+            if not v['m_targetAssetType'] in ['PTexture2D', 'PTextureCubeMap']:
+                pass
             load_texture(v, cluster_mesh_info, pkg_name)
 
     if 'PParameterBuffer' in cluster_mesh_info.data_instances_by_class:
@@ -2672,7 +2671,7 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
             bufferviews.append(bufferview)
 
     images = []
-    images_meta = []
+    images_meta = {}
     if 'PAssetReferenceImport' in cluster_mesh_info.data_instances_by_class:
         for v in cluster_mesh_info.data_instances_by_class['PAssetReferenceImport']:
             if v['m_targetAssetType'] == 'PTexture2D':
@@ -2682,8 +2681,8 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
                 v['mu_gltfImageIndex'] = len(images)
                 images.append(image)
             if v['m_targetAssetType'] in ['PTexture2D', 'PTextureCubeMap']:
-                images_meta.append({'uri': v['m_id'], 'm_targetAssetType': v['m_targetAssetType']})
-        metadata_json['images'] = images_meta
+                images_meta[v['m_id']] = v['m_targetAssetType']
+        #metadata_json['images'] = images_meta
 
     cluster_mesh_info.gltf_data['images'] = images
     samplers = []
@@ -2803,6 +2802,12 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
                     material['skinned_shader'] = skinned_material[0]['m_parameterBuffer']['m_effectVariant']['m_id']
                 shaderParameters = {key:list(value) if isinstance(value, array.array) else value for (key,value) in v['m_parameterBuffer']['mu_shaderParameters'].items()}
                 material['shaderTextures'] = {k:v for (k,v) in shaderParameters.items() if isinstance(v,str)}
+                material['non2Dtextures'] = {}
+                for texture in material['shaderTextures']:
+                    if material['shaderTextures'][texture] in images_meta.keys() and images_meta[material['shaderTextures'][texture]] != "PTexture2D":
+                        material['non2Dtextures'][texture] = images_meta[material['shaderTextures'][texture]]
+                if len(material['non2Dtextures']) < 1:
+                    del(material['non2Dtextures'])
                 material['shaderParameters'] = {k:v for (k,v) in shaderParameters.items() if isinstance(v,list)}
                 material['shaderSamplerDefs'] = {k:v for (k,v) in shaderParameters.items() if isinstance(v,dict)}
                 for samplerDef in material['shaderSamplerDefs']:

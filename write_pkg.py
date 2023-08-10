@@ -4,6 +4,7 @@
 # GitHub eArmada8/ed8pkg2gltf
 
 import struct, glob, io, os, sys, shutil
+from xml.dom.minidom import parse
 
 # Adds file onto the end of the stream, and appends name/size to contents.  Offsets are not calculated.
 def insert_file_into_stream (f, content_struct, binary_file_data, file_details):
@@ -35,7 +36,7 @@ def write_pkg_file (newfilename, file_stream, content_struct, magic = b'\x00\x00
         f.write(file_stream.read())
     return
 
-def processFolder(pkg_folder, lz4_compress = False, overwrite = False):
+def processFolder(pkg_folder, include_all = False, lz4_compress = False, overwrite = False):
     if lz4_compress == True:
         try:
             import lz4.block
@@ -43,7 +44,13 @@ def processFolder(pkg_folder, lz4_compress = False, overwrite = False):
         except ModuleNotFoundError:
             lz4_present = False
     if os.path.exists(pkg_folder):
-        files = glob.glob(pkg_folder+'/*.*')
+        if include_all == False and os.path.exists(pkg_folder + '/asset_D3D11.xml'):
+            xmlfile = parse(pkg_folder + '/asset_D3D11.xml')
+            files = [x for x in glob.glob(pkg_folder+'/*.*')\
+                if os.path.basename(x).lower() in [os.path.basename(x.getAttribute("path")).lower() for x\
+                in xmlfile.getElementsByTagName("cluster")]+['asset_d3d11.xml']]
+        else:
+            files = glob.glob(pkg_folder+'/*.*')
         f = io.BytesIO()
         content_struct = []
         for i in range(len(files)):
@@ -80,8 +87,10 @@ if __name__ == "__main__":
         import argparse
         parser = argparse.ArgumentParser()
         parser.add_argument('pkg_folder', help="Name of folder to pack.")
+        parser.add_argument('-a', '--include_all', help="Include all files (ignore asset_D3D11.xml)", action="store_true")
         parser.add_argument('-l', '--lz4_compress', help="Apply LZ4 compression", action="store_true")
         parser.add_argument('-o', '--overwrite', help="Overwrite existing files", action="store_true")
         args = parser.parse_args()
         if os.path.exists(args.pkg_folder):
-            processFolder(args.pkg_folder, lz4_compress = args.lz4_compress, overwrite = args.overwrite)
+            processFolder(args.pkg_folder, include_all = args.include_all, lz4_compress = args.lz4_compress,\
+                overwrite = args.overwrite)

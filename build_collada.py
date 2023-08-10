@@ -64,7 +64,7 @@ def add_materials (collada, metadata, relative_path = '../../..'):
     # Materials and effects can be done in parallel
     library_materials = collada.find('library_materials')
     library_effects = collada.find('library_effects')
-    all_shader_switches = ['SHADER_'+v['shader'].split('#')[-1].replace('/','').replace('.','') for (k,v) in materials.items()]
+    all_shader_switches = ['SHADER_'+v['shader'].split('#')[-1] for (k,v) in materials.items()]
     for material in materials:
         #Materials
         material_element = ET.SubElement(library_materials, 'material')
@@ -144,8 +144,8 @@ def add_materials (collada, metadata, relative_path = '../../..'):
         for parameter in materials[material]['shaderTextures']:
             texture_name = materials[material]['shaderTextures'][parameter].replace('.DDS','.dds').split('/')[-1].split('.dds')[0]
             sampler_name = parameter + 'Sampler'
-            texture_entry = [x for x in metadata['images'] if x['uri'] == materials[material]['shaderTextures'][parameter]][0]
-            if 'm_targetAssetType' in texture_entry and texture_entry['m_targetAssetType'] == 'PTextureCubeMap':
+            if 'non2Dtextures' in materials[material].keys() and parameter in materials[material]['non2Dtextures'].keys() \
+                and materials[material]['non2Dtextures'][parameter] == 'PTextureCubeMap':
                 sampler_type = 'samplerCUBE'
                 tex_type = 'CUBE'
             else:
@@ -236,7 +236,7 @@ def add_materials (collada, metadata, relative_path = '../../..'):
         technique.set("profile", "PHYRE")
         if 'shaderSwitches' in materials[material]:
             material_switches = ET.SubElement(technique, 'material_switches')
-            current_shader_switch = 'SHADER_' + materials[material]['shader'].split('#')[-1].replace('/','').replace('.','')
+            current_shader_switch = 'SHADER_' + materials[material]['shader'].split('#')[-1]
             shader = ET.SubElement(material_switches, current_shader_switch)
             material_switch_list = ET.SubElement(technique, 'material_switch_list')
             # Switches are taken from the shader files themselves
@@ -271,9 +271,16 @@ def add_materials (collada, metadata, relative_path = '../../..'):
         supported_shadows = ET.SubElement(context_switches, 'supported_shadows')
     return(collada)
 
-def calc_abs_matrix(node, skeleton):
+def calc_abs_matrix(node, skeleton, skeletal_bones = []):
     skeleton[node]['abs_matrix'] = numpy.dot(skeleton[skeleton[node]['parent']]['abs_matrix'], skeleton[node]['rel_matrix'])
-    skeleton[node]['inv_matrix'] = numpy.linalg.inv(skeleton[node]['abs_matrix'])
+    try:
+        skeleton[node]['inv_matrix'] = numpy.linalg.inv(skeleton[node]['abs_matrix'])
+    except numpy.linalg.LinAlgError:
+        if skeleton[node]['name'] not in skeletal_bones:
+            pass
+        else:
+            print("LinAlgError: {0} has an invalid matrix and is part of the skeleton.".format(skeleton[node]['name']))
+            raise
     if 'children' in skeleton[node].keys():
         for child in skeleton[node]['children']:
             if child < len(skeleton):
@@ -282,7 +289,7 @@ def calc_abs_matrix(node, skeleton):
     return(skeleton)
 
 # Change matrices to numpy arrays, add parent bone ID, world space matrix, inverse bind matrix
-def add_bone_info (skeleton):
+def add_bone_info (skeleton, skeletal_bones = []):
     children_list = [{i:skeleton[i]['children'] if 'children' in skeleton[i].keys() else []} for i in range(len(skeleton))]
     parent_dict = {x:list(y.keys())[0] for y in children_list for x in list(y.values())[0]}
     top_nodes = [i for i in range(len(skeleton)) if i not in parent_dict.keys()]
@@ -321,7 +328,7 @@ def add_bone_info (skeleton):
         skeleton[node]['abs_matrix'] = skeleton[node]['rel_matrix']
         if 'children' in skeleton[node].keys():
             for child in skeleton[node]['children']:
-                skeleton = calc_abs_matrix(child, skeleton)
+                skeleton = calc_abs_matrix(child, skeleton, skeletal_bones = skeletal_bones)
                 skeleton[node]['num_descendents'] += skeleton[child]['num_descendents'] + 1
     return(skeleton)
 
@@ -515,8 +522,14 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, nod
                 new_index = []
                 for j in range(len(blendweights[i])):
                     if blendweights[i][j] > 0.000001:
-                        new_weight.append(blendweights[i][j])
-                        new_index.append(local_to_global_joints[blendindices[i][j]])
+                        try:
+                            new_weight.append(blendweights[i][j])
+                            new_index.append(local_to_global_joints[blendindices[i][j]])
+                        except KeyError:
+                            missing_bone = [x for x in submesh['vgmap'].keys() if submesh['vgmap'][x] == blendindices[i][j]][0]
+                            print("KeyError: Attempted to map {1} to skeleton while adding submesh {0} to COLLADA, but {1} does not exist in the heirachy!".format(submesh["name"], missing_bone))
+                            input("Press Enter to abort.")
+                            raise
                 new_weights.append(new_weight)
                 new_indices.append(new_index)
             #Uncomment the next 3 lines to force local bones instead of global bones
@@ -708,9 +721,6 @@ def add_physics (collada, physics_metadata):
     library_physics_scenes = collada.find('library_physics_scenes')
     physics_scene = library_physics_scenes.find('physics_scene')
     library_physics_materials = ET.SubElement(collada, 'library_physics_materials')
-    library_animations = collada.find('library_animations')
-    if library_animations == None:
-        library_animations = ET.SubElement(collada, 'library_animations')
     for i in range(len(physics_materials)):
         physics_material_element = ET.SubElement(library_physics_materials, 'physics_material')
         physics_material_element.set("id", "PPhysicsMaterial_{0}".format(physics_materials[i]['mu_memberLoc']))
@@ -794,78 +804,6 @@ def add_physics (collada, physics_metadata):
             technique.set("profile", 'MAYA')
             damping = ET.SubElement(technique, 'damping')
             damping.text = "{0}".format(physics_rigid_bodies[j]['m_linearDamping']) # Or should this be m_angularDamping?
-            animation = ET.SubElement(library_animations, 'animation')
-            animation.set("id", physics_rigid_bodies[j]['mu_name'] + '.active')
-            dynamic_input_source = ET.SubElement(animation, 'source')
-            dynamic_input_source.set("id", physics_rigid_bodies[j]['mu_name'] + '.active_'\
-                + "PPhysicsModel_{0}_".format(physics_models[i]['mu_memberLoc'])\
-                + physics_rigid_bodies[j]['mu_name'] + "_dynamic-input")
-            float_array = ET.SubElement(dynamic_input_source, 'float_array')
-            float_array.set("id", dynamic_input_source.attrib["id"] + "-array")
-            float_array.set("count","2")
-            float_array.text = "0.0416666679084301 8.333333015441895"
-            technique_common = ET.SubElement(dynamic_input_source, 'technique_common')
-            accessor = ET.SubElement(technique_common, 'accessor')
-            accessor.set("source", "#" + float_array.attrib["id"])
-            accessor.set("count", "2")
-            accessor.set("stride", "1")
-            param = ET.SubElement(accessor, 'param')
-            param.set("name", 'TIME')
-            param.set("type", 'float')
-            technique = ET.SubElement(dynamic_input_source, 'technique')
-            technique.set("profile", 'MAYA')
-            pre_infinity = ET.SubElement(technique, 'pre_infinity')
-            pre_infinity.text = 'CONSTANT'
-            post_infinity = ET.SubElement(technique, 'post_infinity')
-            post_infinity.text = 'CONSTANT'
-            dynamic_output_source = ET.SubElement(animation, 'source')
-            dynamic_output_source.set("id", physics_rigid_bodies[j]['mu_name'] + '.active_'\
-                + "PPhysicsModel_{0}_".format(physics_models[i]['mu_memberLoc'])\
-                + physics_rigid_bodies[j]['mu_name'] + "_dynamic-output")
-            float_array = ET.SubElement(dynamic_output_source, 'float_array')
-            float_array.set("id", dynamic_output_source.attrib["id"] + "-array")
-            float_array.set("count","2")
-            float_array.text = "{0} {0}".format(j)
-            technique_common = ET.SubElement(dynamic_output_source, 'technique_common')
-            accessor = ET.SubElement(technique_common, 'accessor')
-            accessor.set("source", "#" + float_array.attrib["id"])
-            accessor.set("count", "2")
-            accessor.set("stride", "1")
-            param = ET.SubElement(accessor, 'param')
-            param.set("type", 'float')
-            dynamic_interpolations_source = ET.SubElement(animation, 'source')
-            dynamic_interpolations_source.set("id", physics_rigid_bodies[j]['mu_name'] + '.active_'\
-                + "PPhysicsModel_{0}_".format(physics_models[i]['mu_memberLoc'])\
-                + physics_rigid_bodies[j]['mu_name'] + "_dynamic-interpolations")
-            name_array = ET.SubElement(dynamic_interpolations_source, 'Name_array')
-            name_array.set("id", dynamic_interpolations_source.attrib["id"] + "-array")
-            name_array.set("count","2")
-            name_array.text = "LINEAR LINEAR"
-            technique_common = ET.SubElement(dynamic_interpolations_source, 'technique_common')
-            accessor = ET.SubElement(technique_common, 'accessor')
-            accessor.set("source", "#" + name_array.attrib["id"])
-            accessor.set("count", "2")
-            accessor.set("stride", "1")
-            param = ET.SubElement(accessor, 'param')
-            param.set("name", 'INTERPOLATION')
-            param.set("type", 'Name')
-            sampler = ET.SubElement(animation, 'sampler')
-            sampler.set("id", physics_rigid_bodies[j]['mu_name'] + '.active_'\
-                + "PPhysicsModel_{0}_".format(physics_models[i]['mu_memberLoc'])\
-                + physics_rigid_bodies[j]['mu_name'] + "_dynamic-sampler")
-            input_input = ET.SubElement(sampler, 'input')
-            input_input.set("semantic", 'INPUT')
-            input_input.set("source", "#" + dynamic_input_source.attrib["id"])
-            output_input = ET.SubElement(sampler, 'input')
-            output_input.set("semantic", 'OUTPUT')
-            output_input.set("source", "#" + dynamic_output_source.attrib["id"])
-            interp_input = ET.SubElement(sampler, 'input')
-            interp_input.set("semantic", 'INTERPOLATION')
-            interp_input.set("source", "#" + dynamic_interpolations_source.attrib["id"])
-            channel = ET.SubElement(animation, 'channel')
-            channel.set("source", "#" + sampler.attrib["id"])
-            channel.set("target", "PPhysicsModel_{0}".format(physics_models[i]['mu_memberLoc']) + "/"\
-                + physics_rigid_bodies[j]['mu_name'] + "/dynamic")
     return(collada)
 
 def write_shader (materials_list):
@@ -880,7 +818,7 @@ def write_shader (materials_list):
         added_shaders = []
         for i in range(len(materials_list)):
             for material in materials_list[i]:
-                shader_switch = 'SHADER_{0}'.format(materials_list[i][material]['shader'].split('#')[-1].replace('/','').replace('.',''))
+                shader_switch = 'SHADER_{0}'.format(materials_list[i][material]['shader'].split('#')[-1])
                 if shader_switch not in added_shaders and materials_list[i][material]['shader'].split('#')[0] == filename:
                     added_shaders.append(shader_switch)
                     shaderfx += '#ifdef {0}\r\n'.format(shader_switch)
@@ -896,7 +834,11 @@ def write_shader (materials_list):
                     for parameter in materials_list[i][material]['shaderSamplerDefs']:
                         shaderfx += 'sampler {0}{{\r\n\tFilter = {1};\r\n}};\r\n'.format(parameter,{0: 21, 64: 148}[materials_list[i][material]['shaderSamplerDefs'][parameter]['m_flags'] & 0x40])
                     for parameter in materials_list[i][material]['shaderTextures']:
-                        shaderfx += 'Texture2D {0} : {0};\r\n'.format(parameter)
+                        if 'non2Dtextures' in materials_list[i][material].keys() and parameter in materials_list[i][material]['non2Dtextures'].keys() \
+                            and materials_list[i][material]['non2Dtextures'][parameter] == 'PTextureCubeMap':
+                            shaderfx += 'TextureCube {0} : {0};\r\n'.format(parameter)
+                        else:
+                            shaderfx += 'Texture2D {0} : {0};\r\n'.format(parameter)
                     shaderfx  += '#endif //! {0}\r\n\r\n\r\n'.format(shader_switch)
         shaderfx += '#ifdef SUBDIV\r\n#undef SKINNING_ENABLED\r\n#undef INSTANCING_ENABLED\r\n#endif // SUBDIV\r\n\r\n'
         shaderfx += '#ifdef SUBDIV_SCALAR_DISPLACEMENT\r\nTexture2D<half> DisplacementScalar;\r\n#endif // SUBDIV_SCALAR_DISPLACEMENT\r\n\r\n'
@@ -934,10 +876,11 @@ def write_asset_xml (metadata_list):
             current_xml_asset = metadata_list[i]['pkg_name']
             current_dae_path = xml_info[list(xml_info.keys())[0]]['dae_path'] # If asset does not exist, use first entry as it is likely the xml is a template
         images = []
-        for j in range(len(metadata_list[i]['images'])):
-            if metadata_list[i]['images'][j]['uri'] not in already_appended:
-                images.append('\t\t<cluster path="data/D3D11/{0}.phyre" type="p_texture" />\r\n'.format(metadata_list[i]['images'][j]['uri']))
-                already_appended.append(metadata_list[i]['images'][j]['uri'])
+        metadata_images = sorted(list(set([x for y in metadata_list[i]['materials'] for x in metadata_list[i]['materials'][y]['shaderTextures'].values()])))
+        for j in range(len(metadata_images)):
+            if metadata_images[j] not in already_appended:
+                images.append('\t\t<cluster path="data/D3D11/{0}.phyre" type="p_texture" />\r\n'.format(metadata_images[j]))
+                already_appended.append(metadata_images[j])
         images.sort()
         shaders = []
         for material in metadata_list[i]['materials']:
@@ -960,7 +903,8 @@ def write_processing_batch_file (models):
     metadata_list = [read_struct_from_json(x) for x in models] # A little inefficient but safer
     xml_info = asset_info_from_xml(metadata_list[0]['pkg_name']+'/asset_D3D11.xml')
     image_copy_text = ''
-    image_folders = list(set([os.path.dirname(x['uri']).replace('/','\\') for y in metadata_list for x in y['images']]))
+    image_folders = sorted(list(set([os.path.dirname(x).replace('/','\\') for y in [x['shaderTextures']\
+        for y in metadata_list for x in y['materials'].values()] for x in y.values()])))
     if len(image_folders) > 0:
         for folder in image_folders:
             image_copy_text += 'copy D3D11\{0}\*.* {1}\r\n'.format(folder, metadata_list[0]['pkg_name'])
@@ -1014,16 +958,19 @@ def build_collada(metadata_name):
             except FileNotFoundError:
                 print("Submesh {0} not found or corrupt, skipping...".format(filename))
         has_skeleton = False
+        skeletal_bones = []
         for i in range(len(submeshes)):
             if 'vgmap' in submeshes[i].keys():
                 has_skeleton = True
+                skeletal_bones.extend(list(submeshes[i]['vgmap'].keys()))
+        skeletal_bones = list(set(skeletal_bones))
         collada = basic_collada(has_skeleton = has_skeleton)
-        images_data = [x['uri'] for x in metadata['images']]
+        images_data = sorted(list(set([x for y in metadata['materials'] for x in metadata['materials'][y]['shaderTextures'].values()])))
         collada = add_images(collada, images_data, relative_path)
         print("Adding materials...")
         collada = add_materials(collada, metadata, relative_path)
         print("Adding skeleton...")
-        skeleton = add_bone_info(metadata['heirarchy'])
+        skeleton = add_bone_info(metadata['heirarchy'], skeletal_bones = skeletal_bones)
         if physics_present == True:
             collada = add_skeleton(collada, metadata, physics_metadata)
         else:

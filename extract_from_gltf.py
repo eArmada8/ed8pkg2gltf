@@ -231,16 +231,12 @@ def image_list (material_struct):
 def load_heirarchy_matrices (gltf, heirarchy):
     skin_nodes = [x for x in gltf.nodes if x.skin is not None]
     for skin_node in skin_nodes:
-        #Strip off the suffix that was inserted by ed8pkg2gltf
-        if len(re.findall('_[0-9][0-9]$', gltf.meshes[skin_node.mesh].name)) > 0:
-            strip = True
-        else:
-            meshname = gltf.meshes[skin_node.mesh].name
         invmtx = {k:v for (k,v) in zip(gltf.skins[skin_node.skin].joints, read_stream(gltf,gltf.skins[skin_node.skin].inverseBindMatrices))}
         for i in range(len(heirarchy)):
             if i in invmtx.keys():
                 heirarchy[i][gltf.meshes[skin_node.mesh].name+'_imtx'] = invmtx[i]
-                if strip == True:
+                #Strip off the suffix that was inserted by ed8pkg2gltf
+                if len(re.findall('_[0-9][0-9]$', gltf.meshes[skin_node.mesh].name)) > 0:
                     heirarchy[i][gltf.meshes[skin_node.mesh].name[:-3]+'_imtx'] = invmtx[i]
     return (heirarchy)
 
