@@ -915,6 +915,7 @@ PhyreDummyShaderCreator.exe D3D11\{0}\{1}.dae.phyre
 copy D3D11\{0}\{1}.dae.phyre .
 python replace_shader_references.py {2}
 del {1}.dae.phyre.bak
+copy /Y .\{1}.dae.phyre D3D11\{0}
 move {1}.dae.phyre {3}'''.format(xml_info[metadata_list[i]['name']]['dae_path'].replace('/','\\'),\
         metadata_list[i]['name'], models[i], metadata_list[0]['pkg_name']) + '\r\n'
     batch_file += image_copy_text + 'python write_pkg.py -l -o {0}\r\ndel *.fx\r\ndel *.cgfx\r\n'.format(metadata_list[0]['pkg_name'])
