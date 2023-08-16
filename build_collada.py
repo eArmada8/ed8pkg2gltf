@@ -845,9 +845,7 @@ def write_shader (materials_list):
         shaderfx += '#ifdef SUBDIV_VECTOR_DISPLACEMENT\r\nTexture2D<half4> DisplacementVector;\r\n#define USE_TANGENTS\r\n#endif // SUBDIV_VECTOR_DISPLACEMENT\r\n\r\n'
         shaderfx += '#if defined(SUBDIV_SCALAR_DISPLACEMENT) || defined(SUBDIV_VECTOR_DISPLACEMENT)\r\nhalf DisplacementScale = 1.0f;\r\n'
         shaderfx += '#define USE_UVS\r\n#endif // defined(SUBDIV_SCALAR_DISPLACEMENT) || defined(SUBDIV_VECTOR_DISPLACEMENT)\r\n\r\n'
-        shaderfx += '#ifndef __ORBIS__\r\n#ifndef ALPHA_ENABLED\r\ntechnique11 ForwardRender\r\n'
-        shaderfx += '<\r\n	string PhyreRenderPass = "Opaque";\r\n>\r\n{\r\n	pass pass0\r\n	{\r\n	}\r\n}\r\n'
-        shaderfx += '#endif //! ALPHA_ENABLED\r\n#endif //! __ORBIS__\r\n'
+        shaderfx += 'technique11 ForwardRender\r\n<\r\n	string PhyreRenderPass = "Opaque";\r\n>\r\n{\r\n	pass pass0\r\n	{\r\n	}\r\n}\r\n'
         with open(filename, 'wb') as f:
             f.write(shaderfx.encode('utf-8'))
     return
