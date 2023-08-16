@@ -74,7 +74,7 @@ def add_materials (collada, metadata, relative_path = '../../..'):
         instance_effect.set("url", "#{0}-fx".format(material))
         technique_hint = ET.SubElement(instance_effect, 'technique_hint')
         technique_hint.set("platform", "PC-DX")
-        technique_hint.set("ref", "Default")
+        technique_hint.set("ref", "ForwardRender")
         #Effects
         effect_element = ET.SubElement(library_effects, 'effect')
         effect_element.set("id", material + '-fx')
@@ -252,7 +252,7 @@ def add_materials (collada, metadata, relative_path = '../../..'):
                 else:
                     material_switch_entry.set("material_switch_value", "0")
         forwardrendertechnique = ET.SubElement(profile_HLSL, 'technique')
-        forwardrendertechnique.set('sid','Default')
+        forwardrendertechnique.set('sid','ForwardRender')
         renderpass = ET.SubElement(forwardrendertechnique, 'pass')
         shader = ET.SubElement(renderpass, 'shader')
         shader.set('stage','VERTEX')
@@ -844,7 +844,10 @@ def write_shader (materials_list):
         shaderfx += '#ifdef SUBDIV_SCALAR_DISPLACEMENT\r\nTexture2D<half> DisplacementScalar;\r\n#endif // SUBDIV_SCALAR_DISPLACEMENT\r\n\r\n'
         shaderfx += '#ifdef SUBDIV_VECTOR_DISPLACEMENT\r\nTexture2D<half4> DisplacementVector;\r\n#define USE_TANGENTS\r\n#endif // SUBDIV_VECTOR_DISPLACEMENT\r\n\r\n'
         shaderfx += '#if defined(SUBDIV_SCALAR_DISPLACEMENT) || defined(SUBDIV_VECTOR_DISPLACEMENT)\r\nhalf DisplacementScale = 1.0f;\r\n'
-        shaderfx += '#define USE_UVS\r\n#endif // defined(SUBDIV_SCALAR_DISPLACEMENT) || defined(SUBDIV_VECTOR_DISPLACEMENT)'
+        shaderfx += '#define USE_UVS\r\n#endif // defined(SUBDIV_SCALAR_DISPLACEMENT) || defined(SUBDIV_VECTOR_DISPLACEMENT)\r\n\r\n'
+        shaderfx += '#ifndef __ORBIS__\r\n#ifndef ALPHA_ENABLED\r\ntechnique11 ForwardRender\r\n'
+        shaderfx += '<\r\n	string PhyreRenderPass = "Opaque";\r\n>\r\n{\r\n	pass pass0\r\n	{\r\n	}\r\n}\r\n'
+        shaderfx += '#endif //! ALPHA_ENABLED\r\n#endif //! __ORBIS__\r\n'
         with open(filename, 'wb') as f:
             f.write(shaderfx.encode('utf-8'))
     return
