@@ -2,6 +2,10 @@
 
 This a tool set for making mods of character models in Trails of Cold Steel III, IV and into Reverie (Hajimari) for PC (DirectX 11).  It is built on top of uyjulian's ed8pkg2glb tool, which is [here](https://github.com/uyjulian/ed8pkg2glb).  I have not removed the functionality of producing gltf files, although those files are not used in the model compilation process.
 
+## Tutorials:
+
+Please see the [wiki](https://github.com/eArmada8/ed8pkg2gltf/wiki), and the detailed documentation below.
+
 ## Credits:
 The original phyre asset decompiler is written by Julian Uy (github.com/uyjulian), and I have only made modifications.  I wrote the remaining tools, and am very thankful to Arc, My Name, uyjulian, TwnKey and the Kiseki modding discord for their brilliant work and for sharing that work so freely.  I am especially thankful to Arc for sharing expertise in the compilation process and for spending many evenings helping me debug!  I am also very thankful to My Name for sharing models and knowledge as well.
 
