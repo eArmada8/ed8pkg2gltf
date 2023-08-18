@@ -680,7 +680,12 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has
         instance_material = ET.SubElement(technique_common, 'instance_material')
         instance_material.set('symbol', submesh['name'] + 'SG')
         instance_material.set('target', '#' + submesh['material']['material'])
-        material = [v for (k,v) in materials.items() if k == submesh['material']['material']][0]
+        try:
+            material = [v for (k,v) in materials.items() if k == submesh['material']['material']][0]
+        except IndexError:
+            print("IndexError: Vertex attempted to use material {1} while adding submesh {0} to COLLADA, but material {1} does not exist in the metadata!".format(submesh["name"], submesh['material']['material']))
+            input("Press Enter to abort.")
+            raise
         for parameter in material['shaderTextures']:
             # Texture parameters - I think these are constant from texture to texture and model to model, variations are in the effects?
             texture_name = material['shaderTextures'][parameter].replace('.DDS','.dds').split('/')[-1].split('.dds')[0]
@@ -853,7 +858,7 @@ def build_collada(metadata_name):
                 submesh['material'] = read_struct_from_json(meshes_path+'/'+filename+'.material')
                 submeshes.append(submesh)
             except FileNotFoundError:
-                print("Submesh {0} not found or corrupt, skipping...".format(filename))
+                print("Submesh {0} not found, not complete, or corrupt, skipping...".format(filename))
         has_skeleton = False
         skeletal_bones = []
         for i in range(len(submeshes)):
