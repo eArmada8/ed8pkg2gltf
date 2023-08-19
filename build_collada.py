@@ -3,9 +3,14 @@
 #
 # GitHub eArmada8/ed8pkg2gltf
 
-import os, glob, numpy, json, io, sys, xml.dom.minidom
-import xml.etree.ElementTree as ET
-from lib_fmtibvb import *
+try:
+    import os, glob, numpy, json, io, sys, xml.dom.minidom
+    import xml.etree.ElementTree as ET
+    from lib_fmtibvb import *
+except ModuleNotFoundError as e:
+    print("Python module missing! {}".format(e.msg))
+    input("Press Enter to abort.")
+    raise   
 
 # Create the basic COLLADA XML document, with values that do not change from model to model (I think)
 # TODO: Are units, gravity and time step constant?
@@ -280,6 +285,7 @@ def calc_abs_matrix(node, skeleton, skeletal_bones = []):
             pass
         else:
             print("LinAlgError: {0} has an invalid matrix and is part of the skeleton.".format(skeleton[node]['name']))
+            input("Press Enter to abort.")
             raise
     if 'children' in skeleton[node].keys():
         for child in skeleton[node]['children']:
