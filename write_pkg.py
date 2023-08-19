@@ -46,9 +46,14 @@ def processFolder(pkg_folder, include_all = False, lz4_compress = False, overwri
     if os.path.exists(pkg_folder):
         if include_all == False and os.path.exists(pkg_folder + '/asset_D3D11.xml'):
             xmlfile = parse(pkg_folder + '/asset_D3D11.xml')
-            files = [x for x in glob.glob(pkg_folder+'/*.*')\
-                if os.path.basename(x).lower() in [os.path.basename(x.getAttribute("path")).lower() for x\
-                in xmlfile.getElementsByTagName("cluster")]+['asset_d3d11.xml']]
+            xmlfilelist = [os.path.basename(x.getAttribute("path")).lower() for x\
+                in xmlfile.getElementsByTagName("cluster")]+['asset_d3d11.xml']
+            files = [x for x in glob.glob(pkg_folder+'/*.*') if os.path.basename(x).lower() in xmlfilelist]
+            missing_files = [x for x in xmlfilelist if x not in [os.path.basename(x).lower() for x in files]]
+            if len(missing_files) > 0:
+                print("Warning!  Files are missing from {0}, and {0}.pkg will likely crash the game!".format(pkg_folder))
+                print("Missing files: {0}".format(missing_files))
+                input("Press Enter to continue.")
         else:
             files = glob.glob(pkg_folder+'/*.*')
         f = io.BytesIO()

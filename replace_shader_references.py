@@ -34,7 +34,12 @@ def replace_shader_references(filedata, true_shader_dict, fake_shader_dict):
             shader_filename = filedata[shader_loc+1:filedata.find(b'\x00', shader_loc+1)].decode()
             if '#' in shader_filename:
                 shader_key = shader_filename.split('#')[-1]
-                new_phyre += true_shader_dict[fake_shader_dict[shader_key]]
+                try:
+                    new_phyre += true_shader_dict[fake_shader_dict[shader_key]]
+                except KeyError:
+                    print("KeyError: Attempted to replace shader \"{0}\" but it does not exist in the metadata!".format(fake_shader_dict[shader_key]))
+                    input("Press Enter to abort.")
+                    raise
             else:
                 new_phyre += b'\x00' + shader_filename.encode()
             end_key = filedata.find(b'\x00', shader_loc + 1)
