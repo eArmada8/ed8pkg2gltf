@@ -556,10 +556,12 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has
             vgmap_name_array.set('count', str(len(blendjoints)))
             vgmap_name_array.text = " ".join(blendjoints.keys())
             for bone in blendjoints.keys():
-                try:
+                try: # I'm not sure this error can be reached, since invalid bones should have been caught earlier.
                     bone_node = [x for x in collada.iter() if 'sid' in x.attrib and x.attrib['sid'] == bone][0]
                 except IndexError:
-                    print("bone missing: {0}".format(bone))
+                    print("IndexError: Attempted to map {1} to skeleton while adding submesh {0} to COLLADA, but {1} does not exist in the heirachy!".format(submesh["name"], bone))
+                    input("Press Enter to abort.")
+                    raise
                 bone_node.set('type', 'JOINT')
             technique_common = ET.SubElement(vgmap_source, 'technique_common')
             accessor = ET.SubElement(technique_common, 'accessor')
