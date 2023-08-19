@@ -2853,12 +2853,12 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
                     componentType = accessors[vertexData['mu_gltfAccessorIndex']]['componentType']
                     accType = accessors[vertexData['mu_gltfAccessorIndex']]['type']
                     stride = numelements[accType] * (int(bytesize[componentType]) // 8)
-                    dxgi_format = "".join([RGBAD[i]+bytesize[componentType] for i in range(numelements[accType])])\
+                    dxgi_format = "".join([RGBAD[j]+bytesize[componentType] for j in range(numelements[accType])])\
                         + '_' + elementtype[componentType]
                     streamInfo = vertexData['m_streams'][0]
                     vertexBuffer = vertexData['mu_vertBuffer']
                     if partialmaps == False and streamInfo['m_renderDataType'] == 'SkinIndices':
-                        dxgi_format = "".join([RGBAD[i]+'16' for i in range(numelements[accType])]) + '_UINT'
+                        dxgi_format = "".join([RGBAD[j]+'16' for j in range(numelements[accType])]) + '_UINT'
                         vertexBuffer = vertexData['mu_remappedVertBufferSkeleton']
                         stride = numelements[accType] * 2
                     if streamInfo['m_renderDataType'].replace('Skinnable','') in ['ST', 'Tangent', 'Binormal', 'Color']:
