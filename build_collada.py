@@ -681,7 +681,7 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has
             controller_skeleton.text = '#' + skeleton_name # Should always be 'up_point' or its equivalent!
         else:
             if meshname[-3] == '_' and meshname[-2:].isdigit() and len([x for x in collada.iter() if 'sid' in x.attrib and x.attrib['sid'] == meshname[:-3]]) > 0:
-                mesh_node = [x for x in collada.iter() if 'sid' in x.attrib and x.attrib['sid'] == meshname[:-3]][0]
+                mesh_node = add_empty_node (meshname+'_node', [x for x in collada.iter() if 'sid' in x.attrib and x.attrib['sid'] == meshname[:-3]][0])
             else:
                 mesh_node = add_empty_node (meshname+'_node', collada.find('library_visual_scenes')[0])
             instance_geom_controller = ET.SubElement(mesh_node, 'instance_geometry')
