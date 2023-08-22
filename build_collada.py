@@ -822,7 +822,9 @@ def write_shader (materials_list):
                 shader_switch = 'SHADER_{0}'.format(materials_list[i][material]['shader'].split('#')[-1])
                 if shader_switch not in added_shaders and materials_list[i][material]['shader'].split('#')[0] == filename:
                     added_shaders.append(shader_switch)
-                    shaderfx += '#ifdef {0}\r\n'.format(shader_switch)
+                    # Switchless shaders do not need the #ifdef
+                    if len(materials_list[i][material]['shader'].split('#')) > 1:
+                        shaderfx += '#ifdef {0}\r\n'.format(shader_switch)
                     for parameter in materials_list[i][material]['shaderParameters']:
                         if len(materials_list[i][material]['shaderParameters'][parameter]) == 1:
                             valuetype = 'half'
@@ -840,7 +842,10 @@ def write_shader (materials_list):
                             shaderfx += 'TextureCube {0} : {0};\r\n'.format(parameter)
                         else:
                             shaderfx += 'Texture2D {0} : {0};\r\n'.format(parameter)
-                    shaderfx  += '#endif //! {0}\r\n\r\n\r\n'.format(shader_switch)
+                    # Switchless shaders do not need the #ifdef
+                    if len(materials_list[i][material]['shader'].split('#')) > 1:
+                        shaderfx += '#endif //! {0}\r\n'.format(shader_switch)
+                    shaderfx += '\r\n\r\n'
         shaderfx += '#ifdef SUBDIV\r\n#undef SKINNING_ENABLED\r\n#undef INSTANCING_ENABLED\r\n#endif // SUBDIV\r\n\r\n'
         shaderfx += '#ifdef SUBDIV_SCALAR_DISPLACEMENT\r\nTexture2D<half> DisplacementScalar;\r\n#endif // SUBDIV_SCALAR_DISPLACEMENT\r\n\r\n'
         shaderfx += '#ifdef SUBDIV_VECTOR_DISPLACEMENT\r\nTexture2D<half4> DisplacementVector;\r\n#define USE_TANGENTS\r\n#endif // SUBDIV_VECTOR_DISPLACEMENT\r\n\r\n'
