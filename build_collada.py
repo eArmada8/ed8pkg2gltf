@@ -3,9 +3,14 @@
 #
 # GitHub eArmada8/ed8pkg2gltf
 
-import os, glob, numpy, json, io, sys, xml.dom.minidom
-import xml.etree.ElementTree as ET
-from lib_fmtibvb import *
+try:
+    import os, glob, numpy, json, io, sys, xml.dom.minidom
+    import xml.etree.ElementTree as ET
+    from lib_fmtibvb import *
+except ModuleNotFoundError as e:
+    print("Python module missing! {}".format(e.msg))
+    input("Press Enter to abort.")
+    raise   
 
 # Create the basic COLLADA XML document, with values that do not change from model to model (I think)
 # TODO: Are units, gravity and time step constant?
@@ -280,6 +285,7 @@ def calc_abs_matrix(node, skeleton, skeletal_bones = []):
             pass
         else:
             print("LinAlgError: {0} has an invalid matrix and is part of the skeleton.".format(skeleton[node]['name']))
+            input("Press Enter to abort.")
             raise
     if 'children' in skeleton[node].keys():
         for child in skeleton[node]['children']:
@@ -526,10 +532,15 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, nod
                             new_weight.append(blendweights[i][j])
                             new_index.append(local_to_global_joints[blendindices[i][j]])
                         except KeyError:
-                            missing_bone = [x for x in submesh['vgmap'].keys() if submesh['vgmap'][x] == blendindices[i][j]][0]
-                            print("KeyError: Attempted to map {1} to skeleton while adding submesh {0} to COLLADA, but {1} does not exist in the heirachy!".format(submesh["name"], missing_bone))
-                            input("Press Enter to abort.")
-                            raise
+                            try:
+                                missing_bone = [x for x in submesh['vgmap'].keys() if submesh['vgmap'][x] == blendindices[i][j]][0]
+                                print("KeyError: Attempted to map {1} to skeleton while adding submesh {0} to COLLADA, but {1} does not exist in the heirachy!".format(submesh["name"], missing_bone))
+                                input("Press Enter to abort.")
+                                raise
+                            except IndexError:
+                                print("IndexError: Vertex attempted to use group {1} while adding submesh {0} to COLLADA, but group {1} does not exist in the vgmap!".format(submesh["name"], blendindices[i][j]))
+                                input("Press Enter to abort.")
+                                raise
                 new_weights.append(new_weight)
                 new_indices.append(new_index)
             #Uncomment the next 3 lines to force local bones instead of global bones
@@ -550,10 +561,12 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, nod
             vgmap_name_array.set('count', str(len(blendjoints)))
             vgmap_name_array.text = " ".join(blendjoints.keys())
             for bone in blendjoints.keys():
-                try:
+                try: # I'm not sure this error can be reached, since invalid bones should have been caught earlier.
                     bone_node = [x for x in collada.iter() if 'sid' in x.attrib and x.attrib['sid'] == bone][0]
                 except IndexError:
-                    print("bone missing: {0}".format(bone))
+                    print("IndexError: Attempted to map {1} to skeleton while adding submesh {0} to COLLADA, but {1} does not exist in the heirachy!".format(submesh["name"], bone))
+                    input("Press Enter to abort.")
+                    raise
                 bone_node.set('type', 'JOINT')
             technique_common = ET.SubElement(vgmap_source, 'technique_common')
             accessor = ET.SubElement(technique_common, 'accessor')
@@ -685,7 +698,12 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, nod
             instance_material = ET.SubElement(technique_common, 'instance_material')
             instance_material.set('symbol', submesh['name'] + 'SG')
             instance_material.set('target', '#' + submesh['material']['material'])
-            material = [v for (k,v) in materials.items() if k == submesh['material']['material']][0]
+            try:
+                material = [v for (k,v) in materials.items() if k == submesh['material']['material']][0]
+            except IndexError:
+                print("IndexError: Vertex attempted to use material {1} while adding submesh {0} to COLLADA, but material {1} does not exist in the metadata!".format(submesh["name"], submesh['material']['material']))
+                input("Press Enter to abort.")
+                raise
             for parameter in material['shaderTextures']:
                 # Texture parameters - I think these are constant from texture to texture and model to model, variations are in the effects?
                 texture_name = material['shaderTextures'][parameter].replace('.DDS','.dds').split('/')[-1].split('.dds')[0]
