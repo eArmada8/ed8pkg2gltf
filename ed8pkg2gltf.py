@@ -2840,7 +2840,9 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
         t['mu_gltfMeshSegmentsIndicies'] = []
         for tt in range(len(curmesh['m_meshSegments'])):
             primitive = {}
-            fmt = {'stride': '0', 'topology': 'trianglelist', 'format': "DXGI_FORMAT_R16_UINT", 'elements': []}
+            fmt = {'stride': '0', 'topology': 'trianglelist',\
+                'format': "DXGI_FORMAT_R{0}_UINT".format(indiceTypeMappingSize[curmesh['m_meshSegments'][tt]['m_indexData']['m_type']] * 8),\
+                'elements': []}
             elements = []
             vb = []
             m = curmesh['m_meshSegments'][tt]
