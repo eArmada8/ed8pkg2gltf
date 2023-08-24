@@ -366,7 +366,7 @@ def get_bone_dict (skeleton):
     return(bone_dict)
 
 # Recursive function to fill out the entire node tree; call with the first node and i = 0
-def get_children (parent_node, i, metadata, physics_metadata = {}):
+def get_children (parent_node, i, metadata):
     node = ET.SubElement(parent_node, 'node')
     node.set('id', metadata['heirarchy'][i]['name'])
     node.set('name', metadata['heirarchy'][i]['name'])
@@ -378,18 +378,13 @@ def get_children (parent_node, i, metadata, physics_metadata = {}):
     if 'children' in metadata['heirarchy'][i].keys():
         for j in range(len(metadata['heirarchy'][i]['children'])):
             if metadata['heirarchy'][i]['children'][j] < len(metadata['heirarchy']):
-                get_children(node, metadata['heirarchy'][i]['children'][j], metadata, physics_metadata)
+                get_children(node, metadata['heirarchy'][i]['children'][j], metadata)
     extra = ET.SubElement(node, 'extra')
     technique = ET.SubElement(extra, 'technique')
     if 'locators' in metadata.keys() and metadata['heirarchy'][i]['name'] in metadata['locators']:
         technique.set('profile', 'PHYRE')
         locator = ET.SubElement(technique, 'locator')
         locator.text = '1'
-    elif 'PPhysicsRigidBody' in physics_metadata.keys() \
-        and metadata['heirarchy'][i]['name'] in [x['m_targetNode'] for x in physics_metadata['PPhysicsRigidBody']]:
-        technique.set('profile', 'PSSG')
-        translate_keyed = ET.SubElement(technique, 'translate_keyed')
-        rotate_keyed = ET.SubElement(technique, 'rotate_keyed')
     else:
         technique.set('profile', 'MAYA')
         dynamic_attributes = ET.SubElement(technique, 'dynamic_attributes')
@@ -423,7 +418,7 @@ def add_empty_node (name, parent_node):
     return(node)
 
 # Build out the base node tree, run this before building geometries
-def add_skeleton (collada, metadata, physics_metadata = {}):
+def add_skeleton (collada, metadata):
     library_visual_scenes = collada.find('library_visual_scenes')
     scene = collada.find('scene')
     children_nodes = list(set([x for y in [x['children'] for x in metadata['heirarchy'] if 'children' in x.keys()] for x in y]))
@@ -439,7 +434,7 @@ def add_skeleton (collada, metadata, physics_metadata = {}):
             else:
                 # Actually the compiler only supports single scene, so this will create a compile error
                 visual_scene.set('name', metadata['heirarchy'][top_nodes[i]]['name'])
-            get_children(visual_scene, top_nodes[i], metadata, physics_metadata)
+            get_children(visual_scene, top_nodes[i], metadata)
             extra = ET.SubElement(visual_scene, 'extra')
             technique = ET.SubElement(extra, 'technique')
             technique.set('profile','FCOLLADA')
@@ -985,7 +980,7 @@ def build_collada(metadata_name):
                 submesh['material'] = read_struct_from_json(meshes_path+'/'+filename+'.material')
                 submeshes.append(submesh)
             except FileNotFoundError:
-                print("Submesh {0} not found or corrupt, skipping...".format(filename))
+                print("Submesh {0} not found, not complete, or corrupt, skipping...".format(filename))
         has_skeleton = False
         skeletal_bones = []
         for i in range(len(submeshes)):
@@ -1000,13 +995,9 @@ def build_collada(metadata_name):
         collada = add_materials(collada, metadata, relative_path, forward_render = physics_present)
         print("Adding skeleton...")
         skeleton = add_bone_info(metadata['heirarchy'], skeletal_bones = skeletal_bones)
-        if physics_present == True:
-            collada = add_skeleton(collada, metadata, physics_metadata)
-        else:
-            collada = add_skeleton(collada, metadata, {})
+        collada = add_skeleton(collada, metadata)
         print("Adding geometry...")
-        collada = add_geometries_and_controllers(collada, submeshes, skeleton,\
-            metadata['materials'], has_skeleton = has_skeleton)
+        collada = add_geometries_and_controllers(collada, submeshes, skeleton, metadata['materials'], has_skeleton = has_skeleton)
         if physics_present == True:
             print("Adding collision...")
             collada = add_physics(collada, physics_metadata)
