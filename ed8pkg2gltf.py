@@ -3307,10 +3307,11 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
                             'material': {item:vv['m_material'][item] for item in vv['m_material'] if isinstance(vv['m_material'][item],float)},\
                             'shapes': {}}
                         rigid_bodies[vv['mu_name']]['parameters'] = {}
-                        for item in ['m_mass', 'm_rigidBodyType', 'm_massFrameTransform', 'm_initialPosition', 'm_initialOrientation',\
-                                'm_inertiaTensor', 'm_initialLinearVelocity', 'm_initialAngularVelocity', 'm_scale', 'm_initialTransform',\
-                                'm_linearDamping', 'm_angularDamping', 'm_collisionGroup', 'm_enabled', 'm_scriptHandler']:
-                            if not isinstance(vv[item],dict) or item in ['m_scriptHandler']:
+                        #Removed variables: 'm_rigidBodyType', 'm_initialPosition', 'm_initialOrientation','m_inertiaTensor', 'm_angularDamping',
+                                #'m_scale', 'm_initialTransform', 'm_collisionGroup', 'm_enabled', 'm_scriptHandler' and 'PWorldMatrix'
+                        for item in ['m_mass', 'm_massFrameTransform', 'm_linearDamping',\
+                                'm_initialLinearVelocity', 'm_initialAngularVelocity']:
+                            if not isinstance(vv[item],dict): #or item in ['m_scriptHandler']
                                 rigid_bodies[vv['mu_name']]['parameters'][item] = vv[item]
                             elif 'm_elements' in vv[item]:
                                 rigid_bodies[vv['mu_name']]['parameters'][item] = list(vv[item]['m_elements'])
@@ -3318,7 +3319,8 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
                         for vvv in vv['m_shapes']['m_u']:
                             shape = vvv['m_shape']
                             rigid_bodies[vv['mu_name']]['shapes'][shape['mu_name']] = {}
-                            for item in ['m_hollow', 'm_mass', 'm_density', 'm_material', 'm_transform', 'm_scale', 'm_type']:
+                            #Removed variables: 'm_material', 'm_transform', 'm_scale', 'm_type'
+                            for item in ['m_hollow', 'm_mass', 'm_density']:
                                 if not isinstance(vvv[item],dict):
                                     rigid_bodies[vv['mu_name']]['shapes'][shape['mu_name']][item] = vvv[item]
                                 elif 'm_elements' in vvv[item]:
