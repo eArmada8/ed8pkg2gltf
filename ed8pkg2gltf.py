@@ -814,6 +814,10 @@ def process_cluster_instance_list_header(cluster_instance_list_header, g, count_
      'PNode',
      'PNodeContext',
      'PParameterBuffer',
+     'PPhysicsMaterial',
+     'PPhysicsMesh',
+     'PPhysicsModel',
+     'PPhysicsRigidBody',
      'PSamplerState',
      'PSceneRenderPass',
      'PShader',
@@ -827,6 +831,7 @@ def process_cluster_instance_list_header(cluster_instance_list_header, g, count_
      'PShaderPassInfo',
      'PShaderStreamDefinition',
      'PShaderVertexProgram',
+     'PShape',
      'PSkeletonJointBounds',
      'PSkinBoneRemap',
      'PString',
@@ -2352,9 +2357,11 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
     # Use the presence of metadata files to determine which .dae asset we are processing
     if item_num == 0:
         metadata_json_name = pkg_name + "/metadata.json" # First file will be metadata.json
+        physics_json_name = pkg_name + "/physics_data.json" # First file will be metadata.json
         mesh_folder_name = pkg_name + "/meshes"
     else:
         metadata_json_name = pkg_name + "/metadata_{0}.json".format(str(item_num).zfill(2))
+        physics_json_name = pkg_name + "/physics_data_{0}.json".format(str(item_num).zfill(2))
         mesh_folder_name = pkg_name + "/meshes_{0}".format(str(item_num).zfill(2))
     metadata_json = {'name': cluster_mesh_info.filename.split('.', 1)[0], 'pkg_name': pkg_name}
     if not os.path.exists(mesh_folder_name):
@@ -3280,6 +3287,49 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
 
     if 'PLocator' in cluster_mesh_info.data_instances_by_class:
         metadata_json['locators'] = [x['mu_name'] for x in cluster_mesh_info.data_instances_by_class['PLocator']]
+
+    if 'PPhysicsModel' in cluster_mesh_info.data_instances_by_class:
+        def ok_json(obj):
+            try:
+                json.dumps(obj)
+                return True
+            except:
+                return False
+        physics_data = {}
+        if 'PPhysicsModel' in cluster_mesh_info.data_instances_by_class:
+            for v in cluster_mesh_info.data_instances_by_class['PPhysicsModel']:
+                current_rigid_body = v['m_rigidBodies']
+                rigid_bodies = {}
+                if 'PPhysicsRigidBody' in cluster_mesh_info.data_instances_by_class:
+                    while current_rigid_body is not None:
+                        vv = current_rigid_body
+                        rigid_bodies[vv['mu_name']] = {'targetNode': vv['m_targetNode']['m_name'],\
+                            'material': {item:vv['m_material'][item] for item in vv['m_material'] if isinstance(vv['m_material'][item],float)},\
+                            'shapes': {}}
+                        rigid_bodies[vv['mu_name']]['parameters'] = {}
+                        #Removed variables: 'm_rigidBodyType', 'm_initialPosition', 'm_initialOrientation','m_inertiaTensor', 'm_angularDamping',
+                                #'m_scale', 'm_initialTransform', 'm_collisionGroup', 'm_enabled', 'm_scriptHandler' and 'PWorldMatrix'
+                        for item in ['m_mass', 'm_massFrameTransform', 'm_linearDamping',\
+                                'm_initialLinearVelocity', 'm_initialAngularVelocity']:
+                            if not isinstance(vv[item],dict): #or item in ['m_scriptHandler']
+                                rigid_bodies[vv['mu_name']]['parameters'][item] = vv[item]
+                            elif 'm_elements' in vv[item]:
+                                rigid_bodies[vv['mu_name']]['parameters'][item] = list(vv[item]['m_elements'])
+                        #Shapes
+                        for vvv in vv['m_shapes']['m_u']:
+                            shape = vvv['m_shape']
+                            rigid_bodies[vv['mu_name']]['shapes'][shape['mu_name']] = {}
+                            #Removed variables: 'm_material', 'm_transform', 'm_scale', 'm_type'
+                            for item in ['m_hollow', 'm_mass', 'm_density']:
+                                if not isinstance(vvv[item],dict):
+                                    rigid_bodies[vv['mu_name']]['shapes'][shape['mu_name']][item] = vvv[item]
+                                elif 'm_elements' in vvv[item]:
+                                    rigid_bodies[vv['mu_name']]['shapes'][shape['mu_name']][item] = list(vvv[item]['m_elements'])
+                        current_rigid_body = vv['m_next']
+                # Physics models have an m_next and m_world, but we do not support that (yet)
+                physics_data["PPhysicsModel_{0}".format(v['mu_memberLoc'])] = { 'rigid_bodies': rigid_bodies }
+        with open(physics_json_name, 'wb') as f:
+            f.write(json.dumps(physics_data, indent=4).encode("utf-8"))
 
     if len(nodes) > 0:
         import json, base64

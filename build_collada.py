@@ -64,7 +64,7 @@ def add_images (collada, images, relative_path = '../../..'):
     return(collada)
 
 # Build the materials section
-def add_materials (collada, metadata, relative_path = '../../..'):
+def add_materials (collada, metadata, relative_path = '../../..', forward_render = False):
     materials = metadata['materials']
     # Materials and effects can be done in parallel
     library_materials = collada.find('library_materials')
@@ -79,7 +79,10 @@ def add_materials (collada, metadata, relative_path = '../../..'):
         instance_effect.set("url", "#{0}-fx".format(material))
         technique_hint = ET.SubElement(instance_effect, 'technique_hint')
         technique_hint.set("platform", "PC-DX")
-        technique_hint.set("ref", "Default")
+        if forward_render == True:
+            technique_hint.set("ref", "ForwardRender")
+        else:
+            technique_hint.set("ref", "Default")
         #Effects
         effect_element = ET.SubElement(library_effects, 'effect')
         effect_element.set("id", material + '-fx')
@@ -257,7 +260,10 @@ def add_materials (collada, metadata, relative_path = '../../..'):
                 else:
                     material_switch_entry.set("material_switch_value", "0")
         forwardrendertechnique = ET.SubElement(profile_HLSL, 'technique')
-        forwardrendertechnique.set('sid','Default')
+        if forward_render == True:
+            forwardrendertechnique.set("sid", "ForwardRender")
+        else:
+            forwardrendertechnique.set("sid", "Default")
         renderpass = ET.SubElement(forwardrendertechnique, 'pass')
         shader = ET.SubElement(renderpass, 'shader')
         shader.set('stage','VERTEX')
@@ -327,7 +333,7 @@ def add_bone_info (skeleton, skeletal_bones = []):
                 s = numpy.array(identity_mtx)
             matrix = numpy.dot(numpy.dot(t, r), s)
         else:
-            matrix = numpy.array(identity_mtx)    
+            matrix = numpy.array(identity_mtx)
         skeleton[i]['rel_matrix'] = matrix
         skeleton[i]['num_descendents'] = 0
     for node in top_nodes:
@@ -725,6 +731,100 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has
         object_render_properties.set('motionBlurEnabled', '1')
     return(collada)
 
+def add_physics (collada, physics_metadata):
+    import numpy
+    from pyquaternion import Quaternion
+    library_geometries = collada.find('library_geometries')
+    library_physics_scenes = collada.find('library_physics_scenes')
+    physics_scene = library_physics_scenes.find('physics_scene')
+    library_physics_materials = ET.SubElement(collada, 'library_physics_materials')
+    library_physics_models = ET.SubElement(collada, 'library_physics_models')
+    # I'm a little confused here, it seems that there can only be one physics model
+    for model in physics_metadata:
+        physics_model_element = ET.SubElement(library_physics_models, 'physics_model')
+        physics_model_element.set("id", model)
+        instance_physics_model = ET.SubElement(physics_scene, 'instance_physics_model')
+        instance_physics_model.set('url', '#' + model)
+        j = 0 # Counter for dynamic
+        for body_name in physics_metadata[model]['rigid_bodies']:
+            body = physics_metadata[model]['rigid_bodies'][body_name]
+            physics_rigid_body = ET.SubElement(physics_model_element, 'rigid_body')
+            physics_rigid_body.set("name", body_name)
+            physics_rigid_body.set("sid", body_name)
+            # Parameters
+            technique_common = ET.SubElement(physics_rigid_body, 'technique_common')
+            dynamic = ET.SubElement(technique_common, 'dynamic')
+            dynamic.set("sid", 'dynamic')
+            dynamic.text = "{0}".format(j)
+            mass = ET.SubElement(technique_common, 'mass')
+            mass.text = "{0}".format(body['parameters']['m_mass'])
+            mass_frame = ET.SubElement(technique_common, 'mass_frame')
+            mfmtx = body['parameters']['m_massFrameTransform']
+            mass_frame_matrix = numpy.array([[mfmtx[3],mfmtx[7],mfmtx[11],0], mfmtx[0:3]+[0], mfmtx[4:7]+[0], mfmtx[8:11]+[1]])
+            translate = ET.SubElement(mass_frame, 'translate')
+            translate.text = " ".join([str(x) for x in mass_frame_matrix[3][0:3]])
+            rotate = ET.SubElement(mass_frame, 'rotate')
+            rotate_q = Quaternion(matrix=mass_frame_matrix.transpose())
+            rotate.text = " ".join([str(x) for x in list(rotate_q)])
+            # Material
+            instance_physics_material = ET.SubElement(technique_common, 'instance_physics_material')
+            instance_physics_material.set('url', "#PPhysicsMaterial_{0}".format(body_name))
+            physics_material_element = ET.SubElement(library_physics_materials, 'physics_material')
+            physics_material_element.set("id", "PPhysicsMaterial_{0}".format(body_name))
+            physics_material_element.set("name", "PPhysicsMaterial_{0}".format(body_name))
+            material_technique_common = ET.SubElement(physics_material_element, 'technique_common')
+            dynamic_friction = ET.SubElement(material_technique_common, 'dynamic_friction')
+            dynamic_friction.text = "{0}".format(body['material']['m_dynamicFriction'])
+            static_friction = ET.SubElement(material_technique_common, 'static_friction')
+            static_friction.text = "{0}".format(body['material']['m_staticFriction'])
+            restitution = ET.SubElement(material_technique_common, 'restitution')
+            restitution.text = "{0}".format(body['material']['m_restitution'])
+            # Shape
+            for shape_name in body['shapes']:
+                rbshape = body['shapes'][shape_name]
+                shape = ET.SubElement(technique_common, 'shape')
+                hollow = ET.SubElement(shape, 'hollow')
+                hollow.text = str(rbshape['m_hollow']).lower()
+                mass = ET.SubElement(shape, 'mass')
+                mass.text = "{0}".format(rbshape['m_mass'])
+                density = ET.SubElement(shape, 'density')
+                density.text = "{0}".format(rbshape['m_density'])
+                # Strange that the geometry is inside the shape in collada, but inside the rigid body in phyre?
+                geometries = [x.attrib['id'] for x in library_geometries.findall('geometry')\
+                    if body['targetNode'] in x.attrib['id']]
+                for l in range(len(geometries)):
+                    instance_geometry = ET.SubElement(shape, 'instance_geometry')
+                    instance_geometry.set('url', "#{0}".format(geometries[l]))
+            # More parameters
+            technique = ET.SubElement(physics_rigid_body, 'technique')
+            technique.set("profile", 'MAYA')
+            damping = ET.SubElement(technique, 'damping')
+            damping.text = "{0}".format(body['parameters']['m_linearDamping']) # Or should this be m_angularDamping?
+            instance_rigid_body = ET.SubElement(instance_physics_model, 'instance_rigid_body')
+            instance_rigid_body.set("target", "#"+body['targetNode'])
+            instance_rigid_body.set("body", body_name)
+            technique_common = ET.SubElement(instance_rigid_body, 'technique_common')
+            angular_velocity = ET.SubElement(technique_common, 'angular_velocity')
+            angular_velocity.text = "{0}".format(" ".join([str(x) for x in body['parameters']['m_initialAngularVelocity']]))
+            velocity = ET.SubElement(technique_common, 'velocity')
+            velocity.text = "{0}".format(" ".join([str(x) for x in body['parameters']['m_initialLinearVelocity']]))
+            dynamic = ET.SubElement(technique_common, 'dynamic')
+            dynamic.text = "{0}".format(j)
+            mass = ET.SubElement(technique_common, 'mass')
+            mass.text = "{0}".format(body['parameters']['m_mass'])
+            mass_frame = ET.SubElement(technique_common, 'mass_frame')
+            translate = ET.SubElement(mass_frame, 'translate')
+            translate.text = " ".join([str(x) for x in mass_frame_matrix[3][0:3]])
+            rotate = ET.SubElement(mass_frame, 'rotate')
+            rotate_q = Quaternion(matrix=mass_frame_matrix.transpose())
+            rotate.text = " ".join([str(x) for x in list(rotate_q)])
+            technique = ET.SubElement(instance_rigid_body, 'technique')
+            technique.set("profile", 'MAYA')
+            damping = ET.SubElement(technique, 'damping')
+            damping.text = "{0}".format(body['parameters']['m_linearDamping']) # Or should this be m_angularDamping?
+            j += 1
+    return(collada)
+
 def write_shader (materials_list):
     if not os.path.exists("shaders"):
         os.mkdir("shaders")
@@ -768,7 +868,8 @@ def write_shader (materials_list):
         shaderfx += '#ifdef SUBDIV_SCALAR_DISPLACEMENT\r\nTexture2D<half> DisplacementScalar;\r\n#endif // SUBDIV_SCALAR_DISPLACEMENT\r\n\r\n'
         shaderfx += '#ifdef SUBDIV_VECTOR_DISPLACEMENT\r\nTexture2D<half4> DisplacementVector;\r\n#define USE_TANGENTS\r\n#endif // SUBDIV_VECTOR_DISPLACEMENT\r\n\r\n'
         shaderfx += '#if defined(SUBDIV_SCALAR_DISPLACEMENT) || defined(SUBDIV_VECTOR_DISPLACEMENT)\r\nhalf DisplacementScale = 1.0f;\r\n'
-        shaderfx += '#define USE_UVS\r\n#endif // defined(SUBDIV_SCALAR_DISPLACEMENT) || defined(SUBDIV_VECTOR_DISPLACEMENT)'
+        shaderfx += '#define USE_UVS\r\n#endif // defined(SUBDIV_SCALAR_DISPLACEMENT) || defined(SUBDIV_VECTOR_DISPLACEMENT)\r\n\r\n'
+        shaderfx += 'technique11 ForwardRender\r\n<\r\n	string PhyreRenderPass = "Opaque";\r\n>\r\n{\r\n	pass pass0\r\n	{\r\n	}\r\n}\r\n'
         with open(filename, 'wb') as f:
             f.write(shaderfx.encode('utf-8'))
     return
@@ -857,6 +958,11 @@ def build_collada(metadata_name):
             if metadata['name'] in xml_info:
                 dae_path = xml_info[metadata['name']]['dae_path']
         relative_path = '/'.join(['..' for x in range(len(dae_path.split('/')))])
+        physics_present = False
+        if os.path.exists(metadata_name.replace('metadata','physics_data')):
+            print("Physics data found.")
+            physics_metadata = read_struct_from_json(metadata_name.replace('metadata','physics_data'))
+            physics_present = True
         meshes_path = 'meshes' + metadata_name.split('.json')[0].split('metadata')[-1]
         submeshes = []
         meshes = [x.split(meshes_path+'\\')[1].split('.fmt')[0] for x in glob.glob(meshes_path+'/*.fmt')]
@@ -886,12 +992,15 @@ def build_collada(metadata_name):
         images_data = sorted(list(set([x for y in metadata['materials'] for x in metadata['materials'][y]['shaderTextures'].values()])))
         collada = add_images(collada, images_data, relative_path)
         print("Adding materials...")
-        collada = add_materials(collada, metadata, relative_path)
+        collada = add_materials(collada, metadata, relative_path, forward_render = physics_present)
         print("Adding skeleton...")
         skeleton = add_bone_info(metadata['heirarchy'], skeletal_bones = skeletal_bones)
         collada = add_skeleton(collada, metadata)
         print("Adding geometry...")
         collada = add_geometries_and_controllers(collada, submeshes, skeleton, metadata['materials'], has_skeleton = has_skeleton)
+        if physics_present == True:
+            print("Adding collision...")
+            collada = add_physics(collada, physics_metadata)
         print("Writing COLLADA file...")
         with io.BytesIO() as f:
             f.write(ET.tostring(collada, encoding='utf-8', xml_declaration=True))
