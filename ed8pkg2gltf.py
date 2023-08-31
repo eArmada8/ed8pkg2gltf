@@ -1384,7 +1384,7 @@ def decompress(fixup_buffer, fixup_count, object_count, is_pointer):
     while fixup_buffer.pointer_index < pointer_end:
         pack_type_with_mask = fixup_buffer.read()
         pack_type = pack_type_with_mask & 7
-        mask = pack_type_with_mask & -8
+        mask = pack_type_with_mask & ~7
         mask_for_fixups = mask | 1
         if object_count == 1:
             mask_for_fixups |= 2
@@ -2245,7 +2245,6 @@ def render_mesh(g, cluster_mesh_info, cluster_info, cluster_header, pkg_name='',
         if cachekey not in indvertbuffercache:
             indvertbuffercache[cachekey] = indvertbuffer[v['mu_vertBufferPosition']:v['mu_vertBufferPosition'] + v['mu_vertBufferSize']].tobytes()
         v['mu_vertBuffer'] = indvertbuffercache[cachekey]
-
     if 'PMesh' in cluster_mesh_info.data_instances_by_class:
         data_instances = cluster_mesh_info.data_instances_by_class['PMesh']
         for v in cluster_mesh_info.data_instances_by_class['PMesh']:
@@ -2364,7 +2363,7 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
         physics_json_name = pkg_name + "/physics_data_{0}.json".format(str(item_num).zfill(2))
         mesh_folder_name = pkg_name + "/meshes_{0}".format(str(item_num).zfill(2))
     metadata_json = {'name': cluster_mesh_info.filename.split('.', 1)[0], 'pkg_name': pkg_name}
-    if not os.path.exists(mesh_folder_name):
+    if not os.path.exists(mesh_folder_name) and 'PMeshInstance' in cluster_mesh_info.data_instances_by_class:
         os.mkdir(mesh_folder_name)
     asset = {}
     asset['generator'] = 'ed8pkg2glb'
@@ -2570,7 +2569,10 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
 
     if 'PAnimationChannelTimes' in cluster_mesh_info.data_instances_by_class:
         for v in cluster_mesh_info.data_instances_by_class['PAnimationChannelTimes']:
-            blobdata = v['m_timeKeys'].tobytes()
+            blobdata = v['m_timeKeys'][:v['m_keyCount']].tobytes()
+            if 0.0 != 0.0: #extended float
+                float_divided = 1.0 / 0.0
+                blobdata = [x+float_divided for x in v['m_timeKeys'][:v['m_keyCount']]].tobytes()
             bufferview = {}
             bufferview['buffer'] = 0
             bufferview['byteOffset'] = embedded_giant_buffer_length
@@ -2585,6 +2587,16 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
             accessor['componentType'] = 5126
             accessor['type'] = 'SCALAR'
             accessor['count'] = v['m_keyCount']
+            cur_min = float('inf')
+            cur_max = float('-inf')
+            timez = v['m_timeKeys'][:v['m_keyCount']]
+            for x in timez:
+                if x < cur_min:
+                    cur_min = x
+                if x > cur_max:
+                    cur_max = x
+            accessor['min'] = [cur_min]
+            accessor['max'] = [cur_max]
             v['mu_gltfAccessorIndex'] = len(accessors)
             accessors.append(accessor)
             bufferviews.append(bufferview)
@@ -2666,6 +2678,8 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
             accessor['componentType'] = 5126
             accessor['type'] = 'SCALAR'
             accessor['count'] = 2
+            accessor['min'] = [v['m_constantChannelStartTime']]
+            accessor['max'] = [v['m_constantChannelEndTime']]
             v['mu_gltfAccessorIndex'] = len(accessors)
             accessors.append(accessor)
             bufferviews.append(bufferview)
