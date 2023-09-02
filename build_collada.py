@@ -14,7 +14,7 @@ except ModuleNotFoundError as e:
 
 # Create the basic COLLADA XML document, with values that do not change from model to model (I think)
 # TODO: Are units, gravity and time step constant?
-def basic_collada (has_skeleton = True):
+def basic_collada ():
     collada = ET.Element('COLLADA')
     collada.set("xmlns", "http://www.collada.org/2005/11/COLLADASchema")
     collada.set("version", "1.4.1")
@@ -24,29 +24,13 @@ def basic_collada (has_skeleton = True):
     asset_unit.set("name", "centimeter")
     asset_up_axis = ET.SubElement(asset, 'up_axis')
     asset_up_axis.text = "Y_UP"
-    library_physics_scenes = ET.SubElement(collada, 'library_physics_scenes')
-    library_physics_scenes_ps = ET.SubElement(library_physics_scenes, 'physics_scene')
-    library_physics_scenes_ps.set("id","MayaNativePhysicsScene")
-    library_physics_scenes_ps_tc = ET.SubElement(library_physics_scenes_ps, 'technique_common')
-    library_physics_scenes_ps_tc_gravity = ET.SubElement(library_physics_scenes_ps_tc, 'gravity')
-    library_physics_scenes_ps_tc_gravity.text = "0 -980 0"
-    library_physics_scenes_ps_tc_time_step = ET.SubElement(library_physics_scenes_ps_tc, 'time_step')
-    library_physics_scenes_ps_tc_time_step.text = "0.083"
-    library_images = ET.SubElement(collada, 'library_images')
-    library_materials = ET.SubElement(collada, 'library_materials')
-    library_effects = ET.SubElement(collada, 'library_effects')
-    library_geometries = ET.SubElement(collada, 'library_geometries')
-    if has_skeleton == True:
-        library_controllers = ET.SubElement(collada, 'library_controllers')
     library_visual_scenes = ET.SubElement(collada, 'library_visual_scenes')
     scene = ET.SubElement(collada, 'scene')
-    instance_physics_scene = ET.SubElement(scene, 'instance_physics_scene')
-    instance_physics_scene.set('url', '#MayaNativePhysicsScene')
     return(collada)
 
 # Add image URIs
 def add_images (collada, images, relative_path = '../../..'):
-    library_images = collada.find('library_images')
+    library_images = ET.SubElement(collada, 'library_images')
     for image in images:
         image_name = image.replace('.DDS','.dds').split('.dds')[0]
         image_element = ET.SubElement(library_images, 'image')
@@ -67,8 +51,8 @@ def add_images (collada, images, relative_path = '../../..'):
 def add_materials (collada, metadata, relative_path = '../../..', forward_render = False):
     materials = metadata['materials']
     # Materials and effects can be done in parallel
-    library_materials = collada.find('library_materials')
-    library_effects = collada.find('library_effects')
+    library_materials = ET.SubElement(collada, 'library_materials')
+    library_effects = ET.SubElement(collada, 'library_effects')
     all_shader_switches = ['SHADER_'+v['shader'].split('#')[-1] for (k,v) in materials.items()]
     for material in materials:
         #Materials
@@ -366,19 +350,29 @@ def get_bone_dict (skeleton):
     return(bone_dict)
 
 # Recursive function to fill out the entire node tree; call with the first node and i = 0
-def get_children (parent_node, i, metadata):
+def get_children (parent_node, i, metadata, skeletal_bones = []):
     node = ET.SubElement(parent_node, 'node')
     node.set('id', metadata['heirarchy'][i]['name'])
     node.set('name', metadata['heirarchy'][i]['name'])
     node.set('sid', metadata['heirarchy'][i]['name'])
-    node.set('type', 'NODE')
     if 'rel_matrix' in metadata['heirarchy'][i]:
         matrix = ET.SubElement(node, 'matrix')
+        matrix.set('sid','transform')
         matrix.text = " ".join(["{0}".format(x) for x in metadata['heirarchy'][i]['rel_matrix'].flatten('C')])
+    if metadata['heirarchy'][i]['name'] in skeletal_bones:
+        node.set('type', 'JOINT')
+        extra = ET.SubElement(node, 'extra')
+        technique = ET.SubElement(extra, 'technique')
+        technique.set('profile','PSSG')
+        translate_keyed = ET.SubElement(technique, 'translate_keyed')
+        rotate_keyed = ET.SubElement(technique, 'rotate_keyed')
+        scale_keyed = ET.SubElement(technique, 'scale_keyed')
+    else:
+        node.set('type', 'NODE')
     if 'children' in metadata['heirarchy'][i].keys():
         for j in range(len(metadata['heirarchy'][i]['children'])):
             if metadata['heirarchy'][i]['children'][j] < len(metadata['heirarchy']):
-                get_children(node, metadata['heirarchy'][i]['children'][j], metadata)
+                get_children(node, metadata['heirarchy'][i]['children'][j], metadata, skeletal_bones = skeletal_bones)
     extra = ET.SubElement(node, 'extra')
     technique = ET.SubElement(extra, 'technique')
     if 'locators' in metadata.keys() and metadata['heirarchy'][i]['name'] in metadata['locators']:
@@ -404,6 +398,7 @@ def add_empty_node (name, parent_node):
     node.set('sid', name)
     node.set('type', 'NODE')
     matrix = ET.SubElement(node, 'matrix')
+    matrix.set('sid','transform')
     matrix.text = "1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"
     extra = ET.SubElement(node, 'extra')
     technique = ET.SubElement(extra, 'technique')
@@ -418,7 +413,7 @@ def add_empty_node (name, parent_node):
     return(node)
 
 # Build out the base node tree, run this before building geometries
-def add_skeleton (collada, metadata):
+def add_skeleton (collada, metadata, skeletal_bones = [], ani_times = [0,8.33]):
     library_visual_scenes = collada.find('library_visual_scenes')
     scene = collada.find('scene')
     children_nodes = list(set([x for y in [x['children'] for x in metadata['heirarchy'] if 'children' in x.keys()] for x in y]))
@@ -434,25 +429,25 @@ def add_skeleton (collada, metadata):
             else:
                 # Actually the compiler only supports single scene, so this will create a compile error
                 visual_scene.set('name', metadata['heirarchy'][top_nodes[i]]['name'])
-            get_children(visual_scene, top_nodes[i], metadata)
+            get_children(visual_scene, top_nodes[i], metadata, skeletal_bones = skeletal_bones)
             extra = ET.SubElement(visual_scene, 'extra')
             technique = ET.SubElement(extra, 'technique')
             technique.set('profile','FCOLLADA')
             start_time = ET.SubElement(technique, 'start_time')
-            start_time.text = '0'
+            start_time.text = str(ani_times[0])
             end_time = ET.SubElement(technique, 'end_time')
-            end_time.text = '8.333333015441895'
+            end_time.text = str(ani_times[1])
             instance_visual_scene = ET.SubElement(scene, 'instance_visual_scene')
             instance_visual_scene.set('url', '#' + metadata['heirarchy'][top_nodes[i]]['name'])
     return(collada)
 
 # Add geometries and skin them.  Needs a base node tree to build links to.
 def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has_skeleton = True):
-    library_geometries = collada.find('library_geometries')
+    library_geometries = ET.SubElement(collada, 'library_geometries')
     #Find mesh instances with saved inverted bind matrices
     mesh_instances = list(set([x.split('_imtx')[0] for i in range(len(skeleton)) for x in skeleton[i].keys() if '_imtx' in x]))
     if has_skeleton == True:
-        library_controllers = collada.find('library_controllers')
+        library_controllers = ET.SubElement(collada, 'library_controllers')
         library_visual_scenes = collada.find('library_visual_scenes')
         top_node_children = [x['children'] for x in skeleton if x['name'] == library_visual_scenes[0].attrib['id']][0] # Children of top node
         # I know this results in some overwriting but it does not matter, we are just trying to identify the child of the top node that is the skeleton
@@ -735,8 +730,17 @@ def add_physics (collada, physics_metadata):
     import numpy
     from pyquaternion import Quaternion
     library_geometries = collada.find('library_geometries')
-    library_physics_scenes = collada.find('library_physics_scenes')
-    physics_scene = library_physics_scenes.find('physics_scene')
+    library_physics_scenes = ET.SubElement(collada, 'library_physics_scenes')
+    physics_scene = ET.SubElement(library_physics_scenes, 'physics_scene')
+    physics_scene.set("id","MayaNativePhysicsScene")
+    library_physics_scenes_ps_tc = ET.SubElement(physics_scene, 'technique_common')
+    library_physics_scenes_ps_tc_gravity = ET.SubElement(library_physics_scenes_ps_tc, 'gravity')
+    library_physics_scenes_ps_tc_gravity.text = "0 -980 0"
+    library_physics_scenes_ps_tc_time_step = ET.SubElement(library_physics_scenes_ps_tc, 'time_step')
+    library_physics_scenes_ps_tc_time_step.text = "0.083"
+    scene = collada.find('scene')
+    instance_physics_scene = ET.SubElement(scene, 'instance_physics_scene')
+    instance_physics_scene.set('url', '#MayaNativePhysicsScene')
     library_physics_materials = ET.SubElement(collada, 'library_physics_materials')
     library_physics_models = ET.SubElement(collada, 'library_physics_models')
     # I'm a little confused here, it seems that there can only be one physics model
@@ -988,14 +992,14 @@ def build_collada(metadata_name):
                 has_skeleton = True
                 skeletal_bones.extend(list(submeshes[i]['vgmap'].keys()))
         skeletal_bones = list(set(skeletal_bones))
-        collada = basic_collada(has_skeleton = has_skeleton)
+        collada = basic_collada()
         images_data = sorted(list(set([x for y in metadata['materials'] for x in metadata['materials'][y]['shaderTextures'].values()])))
         collada = add_images(collada, images_data, relative_path)
         print("Adding materials...")
         collada = add_materials(collada, metadata, relative_path, forward_render = physics_present)
         print("Adding skeleton...")
         skeleton = add_bone_info(metadata['heirarchy'], skeletal_bones = skeletal_bones)
-        collada = add_skeleton(collada, metadata)
+        collada = add_skeleton(collada, metadata, skeletal_bones = skeletal_bones)
         print("Adding geometry...")
         collada = add_geometries_and_controllers(collada, submeshes, skeleton, metadata['materials'], has_skeleton = has_skeleton)
         if physics_present == True:
