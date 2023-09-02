@@ -881,17 +881,23 @@ def write_shader (materials_list):
 def asset_info_from_xml(filename):
     assetfile = ET.parse(filename)
     daes = {}
+    textures = {}
     for i in range(len(assetfile.getroot())):
         asset_symbol = assetfile.getroot()[i].attrib['symbol']
         dae_files = [x.attrib['path'] for x in assetfile.getroot()[i] if x.attrib['type'] == 'p_collada']
+        texture_files = [x.attrib['path'] for x in assetfile.getroot()[i] if x.attrib['type'] == 'p_texture']
         if len(dae_files) > 0:
             for j in range(len(dae_files)):
                 daes[dae_files[j].split('/')[-1].split('.dae')[0]] =\
                     {'asset_symbol': asset_symbol, 'dae_path': os.path.dirname(dae_files[j].replace('data/D3D11/',''))}
-    return(daes)
+        if len(texture_files) > 0:
+            for j in range(len(texture_files)):
+                textures[texture_files[j].split('/')[-1].split('.phyre')[0]] =\
+                    {'asset_symbol': asset_symbol, 'dae_path': os.path.dirname(texture_files[j].replace('data/D3D11/',''))}
+    return(daes, textures)
 
 def write_asset_xml (metadata_list):
-    xml_info = asset_info_from_xml(metadata_list[0]['pkg_name']+'/asset_D3D11.xml')
+    xml_info, textures = asset_info_from_xml(metadata_list[0]['pkg_name']+'/asset_D3D11.xml')
     if not os.path.exists(metadata_list[0]['pkg_name']):
         os.mkdir(metadata_list[0]['pkg_name'])
     filename = '{0}/asset_D3D11.xml'.format(metadata_list[0]['pkg_name'])
@@ -930,7 +936,7 @@ def write_asset_xml (metadata_list):
 
 def write_processing_batch_file (models):
     metadata_list = [read_struct_from_json(x) for x in models] # A little inefficient but safer
-    xml_info = asset_info_from_xml(metadata_list[0]['pkg_name']+'/asset_D3D11.xml')
+    xml_info, textures = asset_info_from_xml(metadata_list[0]['pkg_name']+'/asset_D3D11.xml')
     image_copy_text = ''
     image_folders = sorted(list(set([os.path.dirname(x).replace('/','\\') for y in [x['shaderTextures']\
         for y in metadata_list for x in y['materials'].values()] for x in y.values()])))
@@ -952,13 +958,29 @@ move {1}.dae.phyre {3}'''.format(xml_info[metadata_list[i]['name']]['dae_path'].
         f.write(batch_file.encode('utf-8'))
     return
 
+def write_texture_processing_batch_file (asset_xml, xml_num = 0):
+    daes, textures = asset_info_from_xml(asset_xml)
+    image_copy_text = ''
+    images = ["{0}/{1}".format(textures[x]['dae_path'],x).replace('/','\\') for x in textures]
+    image_folders = [x.replace('/','\\') for x in sorted(list(set([textures[x]['dae_path'] for x in textures])))]
+    if len(image_folders) > 0:
+        for folder in image_folders:
+            image_copy_text += 'copy D3D11\{0}\*.* {1}\r\n'.format(folder, os.path.dirname(asset_xml))
+    batch_file = '@ECHO OFF\r\nset "SCE_PHYRE=%cd%"\r\n'
+    for i in range(len(images)):
+        batch_file += 'CSIVAssetImportTool.exe -fi="{0}" -platform="D3D11" -write=all\r\n'.format(images[i])
+    batch_file += image_copy_text + 'python write_pkg.py -l -o {0}\r\n'.format(os.path.dirname(asset_xml))
+    with open('RunMe{}.bat'.format(xml_num if xml_num else ''), 'wb') as f:
+        f.write(batch_file.encode('utf-8'))
+    return
+
 def build_collada(metadata_name):
     if os.path.exists(metadata_name):
         metadata = read_struct_from_json(metadata_name)
         print("Processing {0}...".format(metadata['pkg_name']))
         dae_path = 'chr/chr/{0}'.format(metadata['name'].split('_')[0]) # Default name, to be overwritten by value in asset_D3D11.xml
         if os.path.exists(metadata['pkg_name']+'/asset_D3D11.xml'):
-            xml_info = asset_info_from_xml(metadata['pkg_name']+'/asset_D3D11.xml')
+            xml_info, textures = asset_info_from_xml(metadata['pkg_name']+'/asset_D3D11.xml')
             if metadata['name'] in xml_info:
                 dae_path = xml_info[metadata['name']]['dae_path']
         relative_path = '/'.join(['..' for x in range(len(dae_path.split('/')))])
@@ -1024,12 +1046,19 @@ if __name__ == '__main__':
     else:
         os.chdir(os.path.abspath(os.path.dirname(__file__)))
     models = glob.glob("metadata*.json")
-    for i in range(len(models)):
-        build_collada(models[i])
-    metadata_list = [read_struct_from_json(x) for x in models]
-    print("Writing shader file...")
-    write_shader([x['materials'] for x in metadata_list])
-    print("Writing asset_D3D11.xml...")
-    write_asset_xml(metadata_list)
-    print("Writing RunMe.bat.")
-    write_processing_batch_file(models)
+    if len(models) > 0:
+        for i in range(len(models)):
+            build_collada(models[i])
+        metadata_list = [read_struct_from_json(x) for x in models]
+        print("Writing shader file...")
+        write_shader([x['materials'] for x in metadata_list])
+        print("Writing asset_D3D11.xml...")
+        write_asset_xml(metadata_list)
+        print("Writing RunMe.bat.")
+        write_processing_batch_file(models)
+    else:
+        print("No model metadata found, entering texture only mode...")
+        asset_xmls = glob.glob('**/asset*.xml', recursive=True)
+        for i in range(len(asset_xmls)):
+            print("Processing {0}...".format(asset_xmls[i].replace('\\','/')))
+            write_texture_processing_batch_file(asset_xmls[i],i)
