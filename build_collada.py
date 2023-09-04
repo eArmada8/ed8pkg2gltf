@@ -6,11 +6,43 @@
 try:
     import os, glob, numpy, json, io, sys, xml.dom.minidom
     import xml.etree.ElementTree as ET
+    from pyquaternion import Quaternion
+    from pygltflib import GLTF2
     from lib_fmtibvb import *
 except ModuleNotFoundError as e:
     print("Python module missing! {}".format(e.msg))
     input("Press Enter to abort.")
     raise   
+
+#Does not support sparse
+def read_gltf_stream (gltf, accessor_num):
+    accessor = gltf.accessors[accessor_num]
+    bufferview = gltf.bufferViews[accessor.bufferView]
+    buffer = gltf.buffers[bufferview.buffer]
+    componentType = {5120: 'b', 5121: 'B', 5122: 'h', 5123: 'H', 5125: 'I', 5126: 'f'}
+    componentSize = {5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4}
+    componentCount = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4, 'MAT2': 4, 'MAT3': 9, 'MAT4': 16}
+    componentFormat = "<{0}{1}".format(componentCount[accessor.type],\
+        componentType[accessor.componentType])
+    componentStride = componentCount[accessor.type] * componentSize[accessor.componentType]
+    data = []
+    with io.BytesIO(gltf.get_data_from_buffer_uri(buffer.uri)) as f:
+        f.seek(bufferview.byteOffset + accessor.byteOffset, 0)
+        for i in range(accessor.count):
+            data.append(list(struct.unpack(componentFormat, f.read(componentStride))))
+            if (bufferview.byteStride is not None) and (bufferview.byteStride > componentStride):
+                f.seek(bufferview.byteStride - componentStride, 1)
+    if accessor.normalized == True:
+        for i in range(len(data)):
+            if componentType == 'b':
+                data[i] = [x / ((2**(8-1))-1) for x in data[i]]
+            elif componentType == 'B':
+                data[i] = [x / ((2**8)-1) for x in data[i]]
+            elif componentType == 'h':
+                data[i] = [x / ((2**(16-1))-1) for x in data[i]]
+            elif componentType == 'H':
+                data[i] = [x / ((2**16)-1) for x in data[i]]
+    return(data)
 
 # Create the basic COLLADA XML document, with values that do not change from model to model (I think)
 # TODO: Are units, gravity and time step constant?
@@ -299,7 +331,6 @@ def add_bone_info (skeleton, skeletal_bones = []):
             matrix = numpy.array([skeleton[i]['matrix'][0:4],\
                 skeleton[i]['matrix'][4:8], skeleton[i]['matrix'][8:12], skeleton[i]['matrix'][12:16]]).transpose()
         elif 'translation' in skeleton[i].keys() or 'rotation' in skeleton[i].keys() or 'scale' in skeleton[i].keys():
-            from pyquaternion import Quaternion
             if 'translation' in skeleton[i].keys():
                 t = numpy.array([[1,0,0,skeleton[i]['translation'][0]],[0,1,0,skeleton[i]['translation'][1]],\
                     [0,0,1,skeleton[i]['translation'][2]],[0,0,0,1]])
@@ -727,8 +758,6 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has
     return(collada)
 
 def add_physics (collada, physics_metadata):
-    import numpy
-    from pyquaternion import Quaternion
     library_geometries = collada.find('library_geometries')
     library_physics_scenes = ET.SubElement(collada, 'library_physics_scenes')
     physics_scene = ET.SubElement(library_physics_scenes, 'physics_scene')
@@ -827,6 +856,136 @@ def add_physics (collada, physics_metadata):
             damping = ET.SubElement(technique, 'damping')
             damping.text = "{0}".format(body['parameters']['m_linearDamping']) # Or should this be m_angularDamping?
             j += 1
+    return(collada)
+
+# We can maintain ability to extract multiple indices, although phyreEngine only has single animations so i=0 always
+def extract_animation (gltf, i = 0, start_at_time_zero = False):
+    ani_bones = sorted(list(set([x.target.node for x in gltf.animations[i].channels])))
+    ani_starttime = min([x for y in [x for y in gltf.animations[i].samplers for x in read_gltf_stream(gltf, y.input)] for x in y])
+    ani_endtime = max([x for y in [x for y in gltf.animations[i].samplers for x in read_gltf_stream(gltf, y.input)] for x in y])
+    if start_at_time_zero == False:
+        ani_timeshift = 0
+    else:
+        ani_timeshift = ani_starttime
+    ani_struct = {}
+    for j in ani_bones:
+        samplers = {y.sampler:y.target.path for y in gltf.animations[i].channels if y.target.node == j}
+        timestamps = sorted(set([x for y in [x for y in \
+            [read_gltf_stream(gltf, gltf.animations[i].samplers[x].input) for x in samplers.keys()] for x in y] for x in y]))
+        transformations = {}
+        # Get base pose information
+        if gltf.nodes[j].matrix is not None:
+            base_s = [numpy.linalg.norm(gltf.nodes[j].matrix[0:3]), numpy.linalg.norm(gltf.nodes[j].matrix[4:7]),\
+                numpy.linalg.norm(gltf.nodes[j].matrix[8:11])]
+            base_t_mtx = numpy.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],gltf.nodes[j].matrix[12:15]+[1]]).transpose()
+            base_r_mtx = numpy.array([(gltf.nodes[j].matrix[0:3]/base_s[0]).tolist()+[0],\
+                (gltf.nodes[j].matrix[4:7]/base_s[1]).tolist()+[0],\
+                (gltf.nodes[j].matrix[8:11]/base_s[2]).tolist()+[0],[0,0,0,1]]).transpose()
+            base_s_mtx = numpy.array([[base_s[0],0,0,0],[0,base_s[1],0,0],[0,0,base_s[2],0],[0,0,0,1]])
+        else:
+            if gltf.nodes[j].translation is not None:
+                base_t_mtx = numpy.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],gltf.nodes[j].translation+[1]]).transpose()
+            else:
+                base_t_mtx = numpy.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]])
+            if gltf.nodes[j].rotation is not None:
+                base_r_mtx = Quaternion(gltf.nodes[j].rotation[3], gltf.nodes[j].rotation[0],\
+                    gltf.nodes[j].rotation[1], gltf.nodes[j].rotation[2]).transformation_matrix
+            else:
+                base_r_mtx = numpy.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]])
+            if gltf.nodes[j].scale is not None:
+                base_s_mtx = numpy.array([[gltf.nodes[j].scale[0],0,0,0],\
+                    [0,gltf.nodes[j].scale[1],0,0],[0,0,gltf.nodes[j].scale[2],0],[0,0,0,1]])
+            else:
+                base_s_mtx = numpy.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]])
+        # Process keyframes
+        for k in range(len(timestamps)):
+            t = base_t_mtx
+            r = base_r_mtx
+            s = base_s_mtx
+            for sampler in samplers:
+                keyed_times = [x for y in read_gltf_stream(gltf, gltf.animations[i].samplers[sampler].input) for x in y]
+                outputs = read_gltf_stream(gltf, gltf.animations[i].samplers[sampler].output)
+                if timestamps[k] in keyed_times:
+                    output = outputs[keyed_times.index(timestamps[k])]
+                    if samplers[sampler] == 'translation':
+                        t = numpy.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],output+[1]]).transpose()
+                    elif samplers[sampler] == 'rotation':
+                        r = Quaternion(w=output[3], x=output[0], y=output[1], z=output[2]).transformation_matrix
+                    elif samplers[sampler] == 'scale':
+                        s = numpy.array([[output[0],0,0,0],[0,output[1],0,0],[0,0,output[2],0],[0,0,0,1]])
+            transformations[timestamps[k] - ani_timeshift] = " ".join(["{0}".format(x) for x in numpy.dot(numpy.dot(t, r), s).flatten('C')])
+        # The most recent sampler is used for interpolation.  We can only use one anyway, since all the transformations are combined.
+        ani_struct[gltf.nodes[j].name] = {'interpolation': gltf.animations[i].samplers[sampler].interpolation, 'transformations': transformations}
+    return(ani_struct, [ani_starttime-ani_timeshift, ani_endtime-ani_timeshift])
+
+#phyreEngine only has single animations so i=0 always
+def add_animations (collada, gltf, ani_struct):
+    library_animations = ET.SubElement(collada, 'library_animations')
+    for bone in ani_struct:
+        animation = ET.SubElement(library_animations, 'animation')
+        animation.set('id', "{0}.matrix".format(bone))
+        input_source = ET.SubElement(animation, 'source')
+        input_source.set('id', "{0}.matrix_{0}_transform-input".format(bone))
+        float_array = ET.SubElement(input_source, 'float_array')
+        float_array.set('id', "{0}.matrix_{0}_transform-input-array".format(bone))
+        float_array.set('count', str(len(ani_struct[bone]['transformations'])))
+        float_array.text = " ".join([str(x) for x in ani_struct[bone]['transformations'].keys()])
+        technique_common = ET.SubElement(input_source, 'technique_common')
+        accessor = ET.SubElement(technique_common, 'accessor')
+        accessor.set('source', "#{0}.matrix_{0}_transform-input-array".format(bone))
+        accessor.set('count', str(len(ani_struct[bone]['transformations'])))
+        accessor.set('stride', '1')
+        param = ET.SubElement(accessor, 'param')
+        param.set('name','TIME')
+        param.set('type','float')
+        technique = ET.SubElement(input_source, 'technique')
+        technique.set('profile','MAYA')
+        pre_infinity = ET.SubElement(technique, 'pre_infinity')
+        pre_infinity.text = 'CONSTANT'
+        post_infinity = ET.SubElement(technique, 'post_infinity')
+        post_infinity.text = 'CONSTANT'
+        output_source = ET.SubElement(animation, 'source')
+        output_source.set('id', "{0}.matrix_{0}_transform-output".format(bone))
+        float_array = ET.SubElement(output_source, 'float_array')
+        float_array.set('id', "{0}.matrix_{0}_transform-output-array".format(bone))
+        float_array.set('count', str(len(ani_struct[bone]['transformations'])*16))
+        float_array.text = " ".join([str(x) for x in ani_struct[bone]['transformations'].values()])
+        technique_common = ET.SubElement(output_source, 'technique_common')
+        accessor = ET.SubElement(technique_common, 'accessor')
+        accessor.set('source', "#{0}.matrix_{0}_transform-output-array".format(bone))
+        accessor.set('count', str(len(ani_struct[bone]['transformations'])))
+        accessor.set('stride', '16')
+        param = ET.SubElement(accessor, 'param')
+        param.set('name','TRANSFORM')
+        param.set('type','float4x4')
+        interpolation_source = ET.SubElement(animation, 'source')
+        interpolation_source.set('id', "{0}.matrix_{0}_transform-interpolations".format(bone))
+        name_array = ET.SubElement(interpolation_source, 'Name_array')
+        name_array.set('id', "{0}.matrix_{0}_transform-interpolations-array".format(bone))
+        name_array.set('count', str(len(ani_struct[bone]['transformations'])))
+        name_array.text = " ".join([ani_struct[bone]['interpolation'] for x in ani_struct[bone]['transformations'].keys()])
+        technique_common = ET.SubElement(interpolation_source, 'technique_common')
+        accessor = ET.SubElement(technique_common, 'accessor')
+        accessor.set('source', "#{0}.matrix_{0}_transform-interpolations-array".format(bone))
+        accessor.set('count', str(len(ani_struct[bone]['transformations'])))
+        accessor.set('stride', '1')
+        param = ET.SubElement(accessor, 'param')
+        param.set('name','INTERPOLATION')
+        param.set('type','Name')
+        sampler = ET.SubElement(animation, 'sampler')
+        sampler.set('id', "{0}.matrix_{0}_transform-sampler".format(bone))
+        sampler_input = ET.SubElement(sampler, 'input')
+        sampler_input.set('semantic','INPUT')
+        sampler_input.set('source', "#{0}.matrix_{0}_transform-input".format(bone))
+        sampler_input = ET.SubElement(sampler, 'input')
+        sampler_input.set('semantic','OUTPUT')
+        sampler_input.set('source', "#{0}.matrix_{0}_transform-output".format(bone))
+        sampler_input = ET.SubElement(sampler, 'input')
+        sampler_input.set('semantic','INTERPOLATION')
+        sampler_input.set('source', "#{0}.matrix_{0}_transform-interpolations".format(bone))
+        channel = ET.SubElement(animation, 'channel')
+        channel.set('source', "#{0}.matrix_{0}_transform-sampler".format(bone))
+        channel.set('target', "{0}/transform".format(bone))
     return(collada)
 
 def write_shader (materials_list):
@@ -934,9 +1093,16 @@ def write_asset_xml (metadata_list):
         f.write(asset_xml.encode('utf-8'))
     return
 
-def write_processing_batch_file (models):
+def write_processing_batch_file (models, animation_metadata = {}):
     metadata_list = [read_struct_from_json(x) for x in models] # A little inefficient but safer
-    xml_info, textures = asset_info_from_xml(metadata_list[0]['pkg_name']+'/asset_D3D11.xml')
+    # Model pkg_name overrides animation pkg_name
+    if len(metadata_list) > 0:
+        pkg_name = metadata_list[0]['pkg_name']
+    elif 'pkg_name' in animation_metadata:
+        pkg_name = animation_metadata['pkg_name']
+    else:
+        return False
+    xml_info, textures = asset_info_from_xml(pkg_name+'/asset_D3D11.xml')
     image_copy_text = ''
     image_folders = sorted(list(set([os.path.dirname(x).replace('/','\\') for y in [x['shaderTextures']\
         for y in metadata_list for x in y['materials'].values()] for x in y.values()])))
@@ -952,11 +1118,22 @@ python replace_shader_references.py {2}
 del {1}.dae.phyre.bak
 copy /Y .\{1}.dae.phyre D3D11\{0}
 move {1}.dae.phyre {3}'''.format(xml_info[metadata_list[i]['name']]['dae_path'].replace('/','\\'),\
-        metadata_list[i]['name'], models[i], metadata_list[0]['pkg_name']) + '\r\n'
-    batch_file += image_copy_text + 'python write_pkg.py -l -o {0}\r\ndel *.fx\r\ndel *.cgfx\r\n'.format(metadata_list[0]['pkg_name'])
+        metadata_list[i]['name'], models[i], pkg_name) + '\r\n'
+    if 'animations' in animation_metadata:
+        for animation in animation_metadata['animations']:
+            if animation in xml_info:
+                dae_path = xml_info[animation]['dae_path']
+            else:
+                dae_path = 'chr/chr/{0}'.format(animation.split('_')[0])
+            batch_file += 'CSIVAssetImportTool.exe -fi="{0}" -platform="D3D11" -write=all\r\n'.format(dae_path \
+                + '/' + animation + ".dae")
+            batch_file += 'copy D3D11\{0}\{1}.dae.phyre {2}\r\n'.format(dae_path.replace('/','\\'), animation, pkg_name)
+    batch_file += image_copy_text + 'python write_pkg.py -l -o {0}\r\n'.format(pkg_name)
+    if len(metadata_list) > 0:
+        batch_file += 'del *.fx\r\ndel *.cgfx\r\n'
     with open('RunMe.bat', 'wb') as f:
         f.write(batch_file.encode('utf-8'))
-    return
+    return True
 
 def write_texture_processing_batch_file (asset_xml, xml_num = 0):
     daes, textures = asset_info_from_xml(asset_xml)
@@ -974,7 +1151,20 @@ def write_texture_processing_batch_file (asset_xml, xml_num = 0):
         f.write(batch_file.encode('utf-8'))
     return
 
-def build_collada(metadata_name):
+def write_collada (collada, full_dae_path):
+    print("Writing COLLADA file...")
+    with io.BytesIO() as f:
+        f.write(ET.tostring(collada, encoding='utf-8', xml_declaration=True))
+        f.seek(0)
+        dom = xml.dom.minidom.parse(f)
+        pretty_xml_as_string = dom.toprettyxml(indent='  ')
+        if not os.path.exists(os.path.dirname(full_dae_path) + '/'):
+            os.makedirs(os.path.dirname(full_dae_path)  +'/')
+        with open(full_dae_path, 'w') as f2:
+            f2.write(pretty_xml_as_string)
+    return
+
+def build_collada (metadata_name):
     if os.path.exists(metadata_name):
         metadata = read_struct_from_json(metadata_name)
         print("Processing {0}...".format(metadata['pkg_name']))
@@ -1027,17 +1217,39 @@ def build_collada(metadata_name):
         if physics_present == True:
             print("Adding collision...")
             collada = add_physics(collada, physics_metadata)
-        print("Writing COLLADA file...")
-        with io.BytesIO() as f:
-            f.write(ET.tostring(collada, encoding='utf-8', xml_declaration=True))
-            f.seek(0)
-            dom = xml.dom.minidom.parse(f)
-            pretty_xml_as_string = dom.toprettyxml(indent='  ')
-            if not os.path.exists(dae_path + '/'):
-                os.makedirs(dae_path  +'/')
-            with open(dae_path + '/' + metadata['name'] + ".dae", 'w') as f2:
-                f2.write(pretty_xml_as_string)
+        write_collada(collada, dae_path + '/' + metadata['name'] + ".dae")
     return
+
+def build_animation_collada (animation, animation_metadata):
+    print("Processing {0}...".format(animation))
+    metadata = {'name': animation, 'pkg_name': animation_metadata['pkg_name'], 'locators':[]}
+    if os.path.exists(metadata['name']+'.gltf'):
+        filename = metadata['name']+'.gltf'
+    elif os.path.exists(metadata['name']+'.glb'):
+        filename = metadata['name']+'.glb'
+    else:
+        print("Animation {} not found, skipping...".format(metadata['name']))
+        return False
+    gltf = GLTF2().load(filename)
+    dae_path = 'chr/chr/{0}'.format(metadata['name'].split('_')[0]) # Default name, to be overwritten by value in asset_D3D11.xml
+    if os.path.exists(metadata['pkg_name']+'/asset_D3D11.xml'):
+        xml_info, textures = asset_info_from_xml(metadata['pkg_name']+'/asset_D3D11.xml')
+        if metadata['name'] in xml_info:
+            dae_path = xml_info[metadata['name']]['dae_path']
+    with open(filename, 'rb') as f:
+        heirarchy = json.loads(f.read())['nodes']
+        metadata['heirarchy'] = heirarchy # Add heirarchy to metadata
+    if animation in animation_metadata['animations'] and 'locators' in animation_metadata['animations'][animation]:
+        metadata['locators'] = animation_metadata['animations'][animation]['locators']
+    collada = basic_collada()
+    print("Adding animations...")
+    ani_struct, ani_times = extract_animation(gltf)
+    collada = add_animations(collada, gltf, ani_struct)
+    print("Adding skeleton...")
+    skeleton = add_bone_info(metadata['heirarchy'], skeletal_bones = list(ani_struct.keys()))
+    collada = add_skeleton(collada, metadata, skeletal_bones = list(ani_struct.keys()), ani_times = ani_times)
+    write_collada(collada, dae_path + '/' + metadata['name'] + ".dae")
+    return True
 
 if __name__ == '__main__':
     # Set current directory
@@ -1046,16 +1258,25 @@ if __name__ == '__main__':
     else:
         os.chdir(os.path.abspath(os.path.dirname(__file__)))
     models = glob.glob("metadata*.json")
+    metadata_list = []
     if len(models) > 0:
         for i in range(len(models)):
             build_collada(models[i])
-        metadata_list = [read_struct_from_json(x) for x in models]
+        metadata_list.extend([read_struct_from_json(x) for x in models])
         print("Writing shader file...")
         write_shader([x['materials'] for x in metadata_list])
+    animation_metadata = {}
+    if os.path.exists("animation_metadata.json"):
+        animation_metadata = read_struct_from_json("animation_metadata.json")
+        for animation in animation_metadata['animations']:
+            ani_ok = build_animation_collada (animation, animation_metadata)
+            if ani_ok:
+                metadata_list.append({'name': animation, 'pkg_name': animation_metadata['pkg_name'], 'materials': []})
+    if len(models) > 0 or ('animations' in animation_metadata and len(animation_metadata['animations']) > 0):
         print("Writing asset_D3D11.xml...")
         write_asset_xml(metadata_list)
         print("Writing RunMe.bat.")
-        write_processing_batch_file(models)
+        write_processing_batch_file(models, animation_metadata)
     else:
         print("No model metadata found, entering texture only mode...")
         asset_xmls = glob.glob('**/asset*.xml', recursive=True)

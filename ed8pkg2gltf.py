@@ -2349,9 +2349,11 @@ def render_mesh(g, cluster_mesh_info, cluster_info, cluster_header, pkg_name='',
     gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_list, pkg_name, partialmaps = partialmaps, allbuffers = allbuffers, item_num = item_num)
 
 shader_material_switches = {}
+animation_metadata = {}
 
 def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_list, pkg_name='', partialmaps = False, allbuffers = False, item_num = 0):
     global shader_material_switches
+    global animation_metadata
     import json
     # Use the presence of metadata files to determine which .dae asset we are processing
     if item_num == 0:
@@ -3355,10 +3357,14 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
             f.write(jsondata)
         with open(pkg_name + "/" + cluster_mesh_info.filename.split('.', 1)[0] + '.bin', 'wb') as f:
             f.write(embedded_giant_buffer_joined)        
-        with open(metadata_json_name, 'wb') as f:
-            f.write(json.dumps(metadata_json, indent=4).encode("utf-8"))
+        if 'materials' in metadata_json:
+            with open(metadata_json_name, 'wb') as f:
+                f.write(json.dumps(metadata_json, indent=4).encode("utf-8"))
+        elif len(animations) > 0:
+            animation_metadata[metadata_json['name']] = {'locators': metadata_json['locators']}
 
 def process_pkg(pkg_name, partialmaps = partial_vgmaps_default, allbuffers = False, overwrite = False):
+    global animation_metadata
     is_cluster = False
     is_pkg = False
     storage_media = None
@@ -3407,6 +3413,11 @@ def process_pkg(pkg_name, partialmaps = partial_vgmaps_default, allbuffers = Fal
                 with storage_media.open(build_items[i], 'rb') as f:
                     with open(pkg_name[:-4] + '/' + pkg_name[:-4] + '/' + build_items[i], 'wb') as ff:
                         ff.write(f.read())
+
+            if len(animation_metadata) > 0:
+                with open(pkg_name[:-4] + '/' + 'animation_metadata.json', 'wb') as f:
+                    f.write(json.dumps({'pkg_name': pkg_name[:-4], 'animations': animation_metadata}, indent=4).encode("utf-8"))
+
     else:
         raise Exception('Passed in file is not compatible file')
 
