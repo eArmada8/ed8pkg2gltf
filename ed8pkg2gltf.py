@@ -2569,6 +2569,8 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
         bufferviews.append(bufferview)
         accessors.append(accessor)
 
+    animation_time_accessors = []
+
     if 'PAnimationChannelTimes' in cluster_mesh_info.data_instances_by_class:
         for v in cluster_mesh_info.data_instances_by_class['PAnimationChannelTimes']:
             blobdata = v['m_timeKeys'][:v['m_keyCount']].tobytes()
@@ -2600,6 +2602,7 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
             accessor['min'] = [cur_min]
             accessor['max'] = [cur_max]
             v['mu_gltfAccessorIndex'] = len(accessors)
+            animation_time_accessors.append(len(accessors))
             accessors.append(accessor)
             bufferviews.append(bufferview)
 
@@ -2683,6 +2686,7 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
             accessor['min'] = [v['m_constantChannelStartTime']]
             accessor['max'] = [v['m_constantChannelEndTime']]
             v['mu_gltfAccessorIndex'] = len(accessors)
+            animation_time_accessors.append(len(accessors))
             accessors.append(accessor)
             bufferviews.append(bufferview)
 
@@ -3211,11 +3215,7 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
                     if len(joints) > 0:
                         skin['joints'] = joints
                     skins.append(skin)
-        mesh_is_empty = False
-    else:
-        mesh_is_empty = True
-
-    if mesh_is_empty and 'PAnimationSet' in cluster_mesh_info.data_instances_by_class:
+    elif 'PAnimationSet' in cluster_mesh_info.data_instances_by_class:
         skin = {}
         skin['skeleton'] = 0
         joints = [i for i in range(len(nodes)) if i != 0]
@@ -3371,7 +3371,8 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
             with open(metadata_json_name, 'wb') as f:
                 f.write(json.dumps(metadata_json, indent=4).encode("utf-8"))
         elif len(animations) > 0:
-            animation_metadata[metadata_json['name']] = {'locators': metadata_json['locators']}
+            animation_metadata[metadata_json['name']] = {'starttime_offset': min([accessors[x]['min'] for x in animation_time_accessors]),\
+                'locators': metadata_json['locators']}
 
 def process_pkg(pkg_name, partialmaps = partial_vgmaps_default, allbuffers = False, overwrite = False):
     global animation_metadata
