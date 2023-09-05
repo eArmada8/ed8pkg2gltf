@@ -3211,7 +3211,17 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
                     if len(joints) > 0:
                         skin['joints'] = joints
                     skins.append(skin)
-    
+        mesh_is_empty = False
+    else:
+        mesh_is_empty = True
+
+    if mesh_is_empty and 'PAnimationSet' in cluster_mesh_info.data_instances_by_class:
+        skin = {}
+        skin['skeleton'] = 0
+        joints = [i for i in range(len(nodes)) if i != 0]
+        if len(joints) > 0:
+            skin['joints'] = joints
+        skins.append(skin)
     cluster_mesh_info.gltf_data['skins'] = skins
 
     if 'heirarchy' in metadata_json:
