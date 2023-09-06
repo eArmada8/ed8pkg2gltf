@@ -3361,12 +3361,14 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
         import json, base64
         embedded_giant_buffer_joined = b''.join(embedded_giant_buffer)
         buffer0['byteLength'] = len(embedded_giant_buffer_joined)
-        with cluster_mesh_info.storage_media.open(pkg_name + "/" + cluster_mesh_info.filename.split('.', 1)[0] + '.gltf', 'wb') as (f):
-            buffer0["uri"] = cluster_mesh_info.filename.split('.', 1)[0] + '.bin'
-            jsondata = json.dumps(cluster_mesh_info.gltf_data, indent=4).encode("utf-8")
+        with cluster_mesh_info.storage_media.open(pkg_name + "/" + cluster_mesh_info.filename.split('.', 1)[0] + '.glb', 'wb') as f:
+            jsondata = json.dumps(cluster_mesh_info.gltf_data).encode('utf-8')
+            jsondata += b' ' * (4 - len(jsondata) % 4)
+            f.write(struct.pack('<III', 1179937895, 2, 12 + 8 + len(jsondata) + 8 + len(embedded_giant_buffer_joined)))
+            f.write(struct.pack('<II', len(jsondata), 1313821514))
             f.write(jsondata)
-        with open(pkg_name + "/" + cluster_mesh_info.filename.split('.', 1)[0] + '.bin', 'wb') as f:
-            f.write(embedded_giant_buffer_joined)        
+            f.write(struct.pack('<II', len(embedded_giant_buffer_joined), 5130562))
+            f.write(embedded_giant_buffer_joined)
         if 'materials' in metadata_json:
             with open(metadata_json_name, 'wb') as f:
                 f.write(json.dumps(metadata_json, indent=4).encode("utf-8"))
