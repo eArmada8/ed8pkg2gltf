@@ -1056,7 +1056,13 @@ def asset_info_from_xml(filename):
     return(daes, textures)
 
 def write_asset_xml (metadata_list):
-    xml_info, textures = asset_info_from_xml(metadata_list[0]['pkg_name']+'/asset_D3D11.xml')
+    try:
+        xml_info, textures = asset_info_from_xml(metadata_list[0]['pkg_name']+'/asset_D3D11.xml')
+    except FileNotFoundError:
+        print("FileNotFoundError: Attempted to read {} but it is not present!".format(metadata_list[0]['pkg_name']+'/asset_D3D11.xml'))
+        print("Autobuild configuration not possible.")
+        input("Press Enter to abort.")
+        raise    
     if not os.path.exists(metadata_list[0]['pkg_name']):
         os.mkdir(metadata_list[0]['pkg_name'])
     filename = '{0}/asset_D3D11.xml'.format(metadata_list[0]['pkg_name'])
@@ -1237,7 +1243,19 @@ def build_animation_collada (animation, animation_metadata):
         if metadata['name'] in xml_info:
             dae_path = xml_info[metadata['name']]['dae_path']
     with open(filename, 'rb') as f:
-        heirarchy = json.loads(f.read())['nodes']
+        if f.read(4) == b'glTF': #GLB format
+            num_sections, file_length = struct.unpack("<II", f.read(8))
+            for i in range(num_sections):
+                section_start = f.tell()
+                section_length, = struct.unpack("<I", f.read(4))
+                section_magic = f.read(4)
+                if section_magic == b'JSON':
+                    heirarchy = json.loads(f.read(section_length))['nodes']
+                else:
+                    f.seek(section_length, 1)
+        else:
+            f.seek(0)
+            heirarchy = json.loads(f.read())['nodes']
         metadata['heirarchy'] = heirarchy # Add heirarchy to metadata
     if animation in animation_metadata['animations'] and 'locators' in animation_metadata['animations'][animation]:
         metadata['locators'] = animation_metadata['animations'][animation]['locators']
