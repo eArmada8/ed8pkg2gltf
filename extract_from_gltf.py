@@ -243,7 +243,7 @@ def load_heirarchy_matrices (gltf, heirarchy):
 def process_gltf(filename, complete_maps = complete_vgmaps_default, overwrite = False):
     print("Processing {0}...".format(filename))
     gltf = GLTF2().load(filename)
-    model_name = filename.split('.gltf')[0]
+    model_name = filename.split('.gl')[0]
     if os.path.exists(model_name) and (os.path.isdir(model_name)) and (overwrite == False):
         if str(input(model_name + " folder exists! Overwrite? (y/N) ")).lower()[0:1] == 'y':
             overwrite = True
@@ -253,7 +253,19 @@ def process_gltf(filename, complete_maps = complete_vgmaps_default, overwrite = 
         if not os.path.exists(model_name + '/meshes'):
             os.mkdir(model_name + '/meshes')
         with open(filename, 'rb') as f:
-            heirarchy = json.loads(f.read())['nodes']
+            if f.read(4) == b'glTF': #GLB format
+                num_sections, file_length = struct.unpack("<II", f.read(8))
+                for i in range(num_sections):
+                    section_start = f.tell()
+                    section_length, = struct.unpack("<I", f.read(4))
+                    section_magic = f.read(4)
+                    if section_magic == b'JSON':
+                        heirarchy = json.loads(f.read(section_length))['nodes']
+                    else:
+                        f.seek(section_length, 1)
+            else:
+                f.seek(0)
+                heirarchy = json.loads(f.read())['nodes']
         heirarchy = load_heirarchy_matrices(gltf, heirarchy)
         joint_nodes = [gltf.nodes[i].name for i in list(set([x for y in [x.joints for x in gltf.skins] for x in y]))]
         locators = [x.name for x in gltf.nodes if x.mesh is None and x.skin is None and x.name not in joint_nodes]
@@ -302,6 +314,6 @@ if __name__ == '__main__':
         if os.path.exists(args.gltf_filename) and args.gltf_filename[-5:].lower() == '.gltf':
             process_gltf(args.gltf_filename, complete_maps = complete_maps, overwrite = args.overwrite)
     else:
-        gltf_files = glob.glob('*.gltf')
+        gltf_files = glob.glob('*.gltf') + glob.glob('*.glb*')
         for i in range(len(gltf_files)):
             process_gltf(gltf_files[i])
