@@ -116,7 +116,7 @@ def process_animation (animation, animation_metadata):
     print("Processing {0}...".format(animation))
     if os.path.exists(animation+'.gltf'):
         ani_filename = animation+'.gltf'
-        output = 'GLB'
+        output = 'GLTF'
     elif os.path.exists(animation+'.glb'):
         ani_filename = animation+'.glb'
         output = 'GLB'
@@ -134,12 +134,11 @@ def process_animation (animation, animation_metadata):
             print("Model {0}.glb/.gltf not found, skipping animation {1}...".format(model_filename, animation))
             return False
         new_model = apply_animations_to_model_gltf (model_gltf, ani_gltf)
+        new_model.convert_buffers(BufferFormat.BINARYBLOB)
         if output == 'GLB':
-            new_model.convert_buffers(BufferFormat.BINARYBLOB)
             new_model.save_binary("{}.glb".format(animation))
             return True
         else:
-            new_model.convert_buffers(BufferFormat.BINFILE)
             new_model.save("{}.gltf".format(animation))
             return True
 
