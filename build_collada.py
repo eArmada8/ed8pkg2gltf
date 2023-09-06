@@ -1267,7 +1267,7 @@ def build_animation_collada (animation, animation_metadata):
     skeleton = add_bone_info(metadata['heirarchy'], skeletal_bones = list(ani_struct.keys()))
     collada = add_skeleton(collada, metadata, skeletal_bones = list(ani_struct.keys()), ani_times = ani_times)
     write_collada(collada, dae_path + '/' + metadata['name'] + ".dae")
-    return True
+    return ani_times
 
 if __name__ == '__main__':
     # Set current directory
@@ -1284,17 +1284,26 @@ if __name__ == '__main__':
         print("Writing shader file...")
         write_shader([x['materials'] for x in metadata_list])
     animation_metadata = {}
+    new_times = {}
     if os.path.exists("animation_metadata.json"):
         animation_metadata = read_struct_from_json("animation_metadata.json")
         for animation in animation_metadata['animations']:
-            ani_ok = build_animation_collada (animation, animation_metadata)
-            if ani_ok:
+            ani_times = build_animation_collada (animation, animation_metadata)
+            if ani_times is not False:
                 metadata_list.append({'name': animation, 'pkg_name': animation_metadata['pkg_name'], 'materials': []})
+                if not round(ani_times[0],3) == round(animation_metadata['animations'][animation]['starttime_offset'][0],3):
+                    new_times[animation] = ani_times
     if len(models) > 0 or ('animations' in animation_metadata and len(animation_metadata['animations']) > 0):
         print("Writing asset_D3D11.xml...")
         write_asset_xml(metadata_list)
         print("Writing RunMe.bat.")
         write_processing_batch_file(models, animation_metadata)
+        if len(new_times) > 0:
+            print("Warning!  There are animations where the start time do not match the metadata!  Ani script updates required.")
+            for new_time in new_times:
+                print("Animation {0} now has start time of {1} seconds, end time of {2} seconds.".format(new_time,\
+                    new_times[new_time][0], new_times[new_time][1]))
+                input("Press Enter to continue.")
     else:
         print("No model metadata found, entering texture only mode...")
         asset_xmls = glob.glob('**/asset*.xml', recursive=True)
