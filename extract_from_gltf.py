@@ -311,7 +311,8 @@ if __name__ == '__main__':
             complete_maps = args.partialmaps
         else:
             complete_maps = args.completemaps
-        if os.path.exists(args.gltf_filename) and args.gltf_filename[-5:].lower() == '.gltf':
+        if os.path.exists(args.gltf_filename) and \
+            (args.gltf_filename[-5:].lower() == '.gltf' or args.gltf_filename[-4:].lower() == '.glb'):
             process_gltf(args.gltf_filename, complete_maps = complete_maps, overwrite = args.overwrite)
     else:
         gltf_files = glob.glob('*.gltf') + glob.glob('*.glb*')
