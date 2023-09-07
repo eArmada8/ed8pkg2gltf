@@ -1,6 +1,6 @@
 # Trails of Cold Steel III / IV / into Reverie Model Toolset
 
-This a tool set for making mods of character models in Trails of Cold Steel III, IV and into Reverie (Hajimari) for PC (DirectX 11).  It is built on top of uyjulian's ed8pkg2glb tool, which is [here](https://github.com/uyjulian/ed8pkg2glb).  I have not removed the functionality of producing gltf files, although those files are not used in the model compilation process.
+This a tool set for making mods of character models in Trails of Cold Steel III, IV and into Reverie (Hajimari) for PC (DirectX 11).  It is built on top of uyjulian's ed8pkg2glb tool, which is [here](https://github.com/uyjulian/ed8pkg2glb).  I have not removed the functionality of producing glb (gltf) files, although those files are not used in the model compilation process.
 
 ## Tutorials:
 
@@ -11,22 +11,22 @@ The original phyre asset decompiler is written by Julian Uy (github.com/uyjulian
 
 ## Requirements:
 1. Python 3.9 or newer is required for use of this script.  It is free from the Microsoft Store, for Windows users.  For Linux users, please consult your distro.
-2. The zstandard module for python is needed for decompiling zstandard-compressed pkgs.  The lz4 module is used for compressing compiled .pkgs.  Use of the glTF mesh exporter additionally requires numpy, pyquaternion and pygltflib.  Install all of these by running the included install_python_modules.bat or by typing "python3 -m pip install zstandard numpy pyquaternion pygltflib" in the command line / shell.
+2. Mumpy, pyquaternion and pygltflib are required by build_collada as well as the glTF mesh exporter.  The zstandard module for python is needed for decompiling zstandard-compressed pkgs.  The lz4 module is used for compressing compiled .pkgs.  Install all of these by running the included install_python_modules.bat or by typing "python3 -m pip install zstandard numpy pyquaternion pygltflib" in the command line / shell.
 3. The output can be imported into Blender using DarkStarSword's amazing plugin: https://github.com/DarkStarSword/3d-fixes/blob/master/blender_3dmigoto.py
 4. Compilation is dependent on the phyre Engine tools from [here](https://github.com/Trails-Research-Group/Doc/releases/download/v0.0/WorkFolder.zip), as described on the [tutorial from the Trails-Research-Group](https://github.com/Trails-Research-Group/Doc/wiki/How-to:-Import-custom-models-to-Cold-Steel-IV).  (You do not need the tutorial for basic mods, just the tools.)  The tools require [the Windows SDK](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/).
 
 ## Usage:
 
 ### Step 1: Decompilation
-Obtain a model pkg file.  In CS3/CS4, the files are stored in assets.pka and must be extracted.  Use [extract_pka.py](https://github.com/eArmada8/unpackpka) in the same folder as assets.pka.
+Obtain a model or animation pkg file.  In CS3/CS4, the files are stored in assets.pka and must be extracted.  Use [extract_pka.py](https://github.com/eArmada8/unpackpka) in the same folder as assets.pka.
 
-Place ed8pkg2gltf.py and lib_fmtibvb.py into a folder with your character model (.pkg) file.  Double-click ed8pkg2gltf.py.  It will create a folder with the same name as the pkg, and dump in there the model in gltf form, meshes for modding in a folder, textures in their own folder, and a metadata.json file.  (Note: Vertex group mapping behavior can be configured, see below.)
+Place ed8pkg2gltf.py and lib_fmtibvb.py into a folder with your character model (.pkg) file.  Double-click ed8pkg2gltf.py.  It will create a folder with the same name as the pkg, and dump in there the model in glb (gltf) form, meshes for modding in a folder, textures in their own folder, and a metadata.json file.  (Note: Vertex group mapping behavior can be configured, see below.)
 
 Note: If there is more than one .pkg file in the directory, the script will dump them all.
 
 ### Step 2: Modding
 
-- Ignore the glTF file.  (Or use it for other purposes, but it is not used during compile.)  (***Note:*** v2.1.1 and above include an experimental glTF mesh dumper that can be used to convert glTFs to raw buffers and a skeleton metadata file.  This is ***not*** my recommended way to mod for most simple mods and will increase the complexity of the process, but will be useful for complex mods where the skeleton will be replaced.  See below.)
+- Ignore the glb (glTF) file for modding models (for animations, see below).  (Or use it for other purposes, but it is not used during compile.)  (***Note:*** v2.1.1 and above include an experimental glTF mesh dumper that can be used to convert glTFs to raw buffers and a skeleton metadata file.  This is ***not*** my recommended way to mod for most simple mods and will increase the complexity of the process, but will be useful for complex mods where the skeleton will be replaced.  See below.)
 
 - There is a folder with the same name as the package, this is the build folder.  The asset_D3D11.xml file and compiled shaders reside here.  For simple mods, nothing here should be changed.
 
@@ -40,11 +40,13 @@ Note: If there is more than one .pkg file in the directory, the script will dump
 
 - Decompiling models with collision (maps) will produce a physics_data.json file.  The collision mesh names should match the target node identified in physics_data.json for a successful compile.  Tuneable parameters will be in this file for defining the rigid bodies (collision meshes) as well, although every map I have examined has the same parameters (except coordinates) so it is likely that there is no good reason to modify these.  There is currently no real documentation for how to make or modify maps; I do not really understand the process.  Consider map support experimental at this time.
 
+- For animation .pkg files, the decompiler will dump all animations in .glb format.  Metadata for animations will be placed in the animation_metadata.json.  The glb files can be directly imported into Blender, but Bone Dir must be set to "Blender (best for re-importing)" upon import or the skeleton will be altered irreversibly, preventing the animation from being used in the game.  Using the files directly is not recommended; instead decompile the base model as well, and put the .glb file in the same folder with the animations and run merge_model_into_animations.py in that folder.  It will insert the model data including meshes / skins / texture references etc into the animation .glb, which will make animation feasible.
+
 ### Step 3: Building a COLLADA .dae and compiling
 
 For this step, put build_collada.py, lib_fmtibvb.py, replace_shader_references.py and write_pkg.py in the model directory (the directory with metadata.json).  You will also need to have the contents of WorkFolder.zip in your model directory.  (You need CSIVAssetImportTool.exe, all the PhyreAsset_____ files, PhyreDummyShaderCreator.exe, SQLite.Interop.dll and System.Data.SQLite.dll.  You do not need the shaders directory.)
 
--Double click build_collada.py.  It will make a .dae file, in the original compile folder as defined in asset_D3D11.xml (by default it is chr/chr/{model name}/).  It will also make a shaders/ed8_chr.fx file for compiling (and/or ed8.fx, etc), and a RunMe.bat.
+-Double click build_collada.py.  It will make a .dae file, in the original compile folder as defined in asset_D3D11.xml (by default it is chr/chr/{model name}/).  It will also make a shaders/ed8_chr.fx file for compiling (and/or ed8.fx, etc), and a RunMe.bat.  (For animations, it will make a .dae file for every animation listed in animation_metadata.json.  Animations will not have shader files.)
 
 -Double click RunMe.bat.  It will run the asset import tool, then it will use the dummy shader creator to identify all the shaders for replacement, then it will use replace_shader_references.py to fix all the shader pointers, and finally it will clean up, move everything to the build directory, and run write_pkg.py to generate your .pkg file.
 
@@ -52,7 +54,7 @@ For this step, put build_collada.py, lib_fmtibvb.py, replace_shader_references.p
 
 **Weight Painting:**
 
-If you would like to weight paint the meshes, you will want to parent to the armature so you can see the results of your painting in Blender.  Import your raw meshes **and** the glTF.  Delete all the meshes from the glTF.  Select all your raw buffers in object mode, then shift-click on the bones (or ctrl-click up_point in the outliner window).  Go to Object menu -> Parent -> Armature Deform (do not select any of the "With" options).  Your meshes are now parented, but still can be exported as .fmt/.ib/.vb.  Note that this is necessary to keep all the original data of the buffers, since the glTF meshes are missing a lot of data and also cannot be exported directly as .fmt/.ib/.vb.  If you want to work with the glTF meshs without going through this parenting process, you can use the glTF extractor (see below).
+If you would like to weight paint the meshes, you will want to parent to the armature so you can see the results of your painting in Blender.  Import your raw meshes **and** the glTF.  Delete all the meshes from the glTF.  Select all your raw buffers in object mode, then shift-click on the bones (or ctrl-click up_point in the outliner window).  Go to Object menu -> Parent -> Armature Deform (do not select any of the "With" options).  Your meshes are now parented, but still can be exported as .fmt/.ib/.vb.  Note that this is necessary to keep all the original data of the buffers, since the glTF meshes are missing a lot of data and also cannot be exported directly as .fmt/.ib/.vb.  If you want to work with the glTF meshs without going through this parenting process, you can use the glTF extractor (see below) - be sure to import with Bone Dir set to "Blender (best for re-importing)".
 
 **Command line arguments for ed8pkg2gltf.py:**
 
@@ -77,11 +79,9 @@ This will also change the command line argument `-p, --partialmaps` into `-c, --
 
 **Experimental glTF extractor**
 
-extract_from_gltf.py is available for rapid conversion of existing assets in glTF form.  (For FBX, I recommend using [Noesis](https://richwhitehouse.com/index.php?content=inc_projects.php&showproject=91) to get your assets into glTF, or you can try exporting glTF from Blender if all you need are the meshes.)  It will take the meshes out of the the gltf in .fmt/.ib/.vb/.vgmap format, and create a skeleton metadata.json.  Please note that quite a lot of information is lost in this process, although it seems to me that the Cold Steel games do not use any of the information that is lost (e.g. binormals).
+extract_from_gltf.py is available for rapid conversion of existing assets in glTF form.  It will take the meshes out of the the gltf in .fmt/.ib/.vb/.vgmap format, and create a skeleton metadata.json.  Please note that quite a lot of information is lost in this process, although it seems to me that the Cold Steel games do not use any of the information that is lost (e.g. binormals).
 
-Note that if you export the glTF from Blender, the meshes produced by extract_from_gltf.py are useable but the skeleton will be inaccurate.  (Blender does not export TANGENT by default; check "Tangent" (Data->Mesh->Tangent in the export window) while exporting to preserve the original tangents otherwise extract_from_gltf.py will auto-calculate tangents using the first UV map and the normals.  Exporting from Blender should be acceptable if you can use the original skeleton extracted by ed8pkg2gltf.py.  If you are using the meshes from noesis FBX, be sure to set the base node scale back to 1.00 (defaults to 0.01 for some reason).
-
-To export the skeleton itself, you will need to export from Blender in FBX format, with leaf bones turned OFF (Armature->Add Leaf Bones should be *unchecked* in the export window).  Then use Noesis to convert the FBX to glTF.   The metadata.json file will need to be updated, only the 'heirarchy' section is immediately useable.  (To get an accurate skeleton into Blender in the first place, again use Noesis to convert the glTF from ed8pkg2gltf.py into FBX.  When importing into Blender, Armature->Ignore Leaf Bones, Force Connect Children and Automatic Bone Orientation must all be *unchecked*.)  Do not use the meshes from noesis FBX->glTF, as of the current version of noesis there is a bug that results in secondary UV map corruption.
+Note that when you import the glTF in Blender using the default settings with Bone Dir set to "Temperance (average)", the meshes produced by extract_from_gltf.py are useable but the skeleton will be inaccurate.  If you will need to modify the skeleton, then set Bone Dir to "Blender (best for re-importing)" at the time of import.  Also, note that Blender does not export TANGENT by default; check "Tangent" (Data->Mesh->Tangent in the export window) while exporting to preserve the original tangents otherwise extract_from_gltf.py will auto-calculate tangents using the first UV map and the normals.  Using the "Temperance (average)" Bone Dir setting when importing into Blender should be acceptable if you can use the original skeleton extracted by ed8pkg2gltf.py; this will make weight painting easier.
 
 Guide to fixing the metadata.json file after using the glTF extractor:
 - ```name``` should be the internal name of the model, and should match the .inf filename.
