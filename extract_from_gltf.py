@@ -116,8 +116,9 @@ def calc_tangents (submesh):
 def dump_meshes (mesh_node, gltf, complete_maps = False):
     basename = mesh_node.name
     mesh = gltf.meshes[mesh_node.mesh]
-    skin = gltf.skins[mesh_node.skin]
-    vgmap = {gltf.nodes[skin.joints[i]].name:i for i in range(len(skin.joints))}
+    if mesh_node.skin is not None:
+        skin = gltf.skins[mesh_node.skin]
+        vgmap = {gltf.nodes[skin.joints[i]].name:i for i in range(len(skin.joints))}
     submeshes = []
     for i in range(len(mesh.primitives)):
         submesh = {'name': '{0}_{1:02d}'.format(basename, i)}
@@ -164,12 +165,13 @@ def dump_meshes (mesh_node, gltf, complete_maps = False):
             #AlignedByteOffset += 12
         submesh['fmt']['stride'] = str(AlignedByteOffset)
         submesh['fmt']['elements'] = elements
-        vgs_i = [i for i in range(len(submesh['vb'])) if submesh['vb'][i]['SemanticName'] == 'BLENDINDICES']
-        if complete_maps == False and len(vgs_i) > 0:
-            used_vgs = list(set([x for y in submesh['vb'][vgs_i[0]]['Buffer'] for x in y]))
-            submesh['vgmap'] = {k:v for (k,v) in vgmap.items() if v in used_vgs }
-        else:
-            submesh['vgmap'] = dict(vgmap)
+        if mesh_node.skin is not None:
+            vgs_i = [i for i in range(len(submesh['vb'])) if submesh['vb'][i]['SemanticName'] == 'BLENDINDICES']
+            if complete_maps == False and len(vgs_i) > 0:
+                used_vgs = list(set([x for y in submesh['vb'][vgs_i[0]]['Buffer'] for x in y]))
+                submesh['vgmap'] = {k:v for (k,v) in vgmap.items() if v in used_vgs }
+            else:
+                submesh['vgmap'] = dict(vgmap)
         submesh['uvmap'] = [{'m_index':i*3, 'm_inputSet':i} for i in range(len([x for x in elements if x['SemanticName']=='TEXCOORD']))]
         if mesh.primitives[i].material is not None:
             submesh['material'] = gltf.materials[mesh.primitives[i].material].name.split('-Skinned')[0]
@@ -277,8 +279,9 @@ def process_gltf(filename, complete_maps = complete_vgmaps_default, overwrite = 
                 write_fmt(submeshes[i]['fmt'], '{0}/meshes/{1}.fmt'.format(model_name, submeshes[i]['name']))
                 write_ib(submeshes[i]['ib'], '{0}/meshes/{1}.ib'.format(model_name, submeshes[i]['name']), submeshes[i]['fmt'])
                 write_vb(submeshes[i]['vb'], '{0}/meshes/{1}.vb'.format(model_name, submeshes[i]['name']), submeshes[i]['fmt'])
-                with open('{0}/meshes/{1}.vgmap'.format(model_name, submeshes[i]['name']), 'wb') as f:
-                    f.write(json.dumps(submeshes[i]['vgmap'], indent=4).encode("utf-8"))
+                if 'vgmap' in submeshes[i]:
+                    with open('{0}/meshes/{1}.vgmap'.format(model_name, submeshes[i]['name']), 'wb') as f:
+                        f.write(json.dumps(submeshes[i]['vgmap'], indent=4).encode("utf-8"))
                 with open('{0}/meshes/{1}.uvmap'.format(model_name, submeshes[i]['name']), 'wb') as f:
                     f.write(json.dumps(submeshes[i]['uvmap'], indent=4).encode("utf-8"))
                 with open('{0}/meshes/{1}.material'.format(model_name, submeshes[i]['name']), 'wb') as f:
