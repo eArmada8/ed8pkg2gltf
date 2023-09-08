@@ -1,5 +1,4 @@
-# Tool to add animation channels to a gltf model.  Will only add channels (and pose data)
-# if there are no channels for the associated bone in the original model.
+# Tool to push a gltf model into animations.  A companion to ed8pkg2gltf.py.
 #
 # GitHub eArmada8/ed8pkg2gltf
 
@@ -11,6 +10,8 @@ from pyquaternion import Quaternion
 preserve_translation = False
 preserve_rotation = False
 preserve_scale = False
+# If True, locators will be transformed regardless of above
+always_transform_locators = True
 
 def read_gltf_stream (gltf, accessor_num):
     accessor = gltf.accessors[accessor_num]
@@ -41,22 +42,13 @@ def read_gltf_stream (gltf, accessor_num):
                 data[i] = [x / ((2**16)-1) for x in data[i]]
     return(data)
 
-def apply_new_animations_to_model_gltf (model_gltf, ani_gltf):
+def apply_animations_to_model_gltf (model_gltf, ani_gltf, locators):
     global preserve_translation, preserve_rotation, preserve_scale
     global always_transform_locators
-    global only_add_nonexistent_animation_bones
 
-    if len(model_gltf.animations) > 0:
-        skip_node_names = [model_gltf.nodes[i].name for i in range(len(model_gltf.nodes)) \
-            if i in [x.target.node for x in model_gltf.animations[0].channels]]
-        animation = model_gltf.animations.pop(0)
-    else: # Why are you using this tool if the model has no animations?
-        skip_node_names = []
-        animation = Animation()
-    
     # Apply animation pose to model
     for i in range(len(model_gltf.nodes)):
-        if model_gltf.nodes[i].name in [x.name for x in ani_gltf.nodes] and model_gltf.nodes[i].name not in skip_node_names:
+        if model_gltf.nodes[i].name in [x.name for x in ani_gltf.nodes]:
             ani_node = [j for j in range(len(ani_gltf.nodes)) if ani_gltf.nodes[j].name == model_gltf.nodes[i].name][0]
             # Model (bind) pose
             if model_gltf.nodes[i].matrix is not None:
@@ -107,11 +99,11 @@ def apply_new_animations_to_model_gltf (model_gltf, ani_gltf):
                 else:
                     anipose_s_mtx = numpy.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]])
             # Overwrite model pose with animation pose per global variable preference
-                if preserve_translation == False:
+                if preserve_translation == False or (model_gltf.nodes[i].name in locators and always_transform_locators == True):
                     t_mtx = anipose_t_mtx
-                if preserve_rotation == False:
+                if preserve_rotation == False or (model_gltf.nodes[i].name in locators and always_transform_locators == True):
                     r_mtx = anipose_r_mtx
-                if preserve_scale == False:
+                if preserve_scale == False or (model_gltf.nodes[i].name in locators and always_transform_locators == True):
                     s_mtx = anipose_s_mtx
             #Delete current model (bind) pose
             for key in ['matrix', 'translation', 'rotation', 'scale']:
@@ -131,6 +123,7 @@ def apply_new_animations_to_model_gltf (model_gltf, ani_gltf):
     if preserve_scale == False:
         allowed_transforms.append('scale')
     for i in range(len(ani_gltf.animations)):
+        animation = Animation()
         for j in range(len(ani_gltf.animations[i].channels)):
             sampler_input_acc = ani_gltf.animations[i].samplers[ani_gltf.animations[i].channels[j].sampler].input
             sampler_input = read_gltf_stream(ani_gltf, sampler_input_acc)
@@ -140,8 +133,7 @@ def apply_new_animations_to_model_gltf (model_gltf, ani_gltf):
             target_path = ani_gltf.animations[i].channels[j].target.path
             target_node_name = ani_gltf.nodes[ani_gltf.animations[i].channels[j].target.node].name
             if target_node_name in [x.name for x in model_gltf.nodes] \
-                and target_node_name not in skip_node_names \
-                and target_path in allowed_transforms:
+                and (target_path in allowed_transforms or (target_node_name in locators and always_transform_locators == True)):
                 target_node = [k for k in range(len(model_gltf.nodes)) if model_gltf.nodes[k].name == target_node_name][0]
                 ani_sampler = AnimationSampler()
                 blobdata = numpy.array(sampler_input,dtype="float32").tobytes()
@@ -195,15 +187,36 @@ def apply_new_animations_to_model_gltf (model_gltf, ani_gltf):
     model_gltf.set_binary_blob(binary_blob)
     return(model_gltf)
 
-def process_animation (model_filename, new_animation_filename):
-    model_gltf = GLTF2().load(model_filename)
-    ani_gltf = GLTF2().load(new_animation_filename)
-    new_filename = '{0}_{1}_merged.glb'.format(os.path.basename(model_filename).split('.gl')[0],\
-        os.path.basename(new_animation_filename).split('.gl')[0])
-    new_model = apply_new_animations_to_model_gltf (model_gltf, ani_gltf)
-    new_model.convert_buffers(BufferFormat.BINARYBLOB)
-    new_model.save_binary("{}.glb".format(new_filename))
-    return True
+def process_animation (animation, animation_metadata):
+    print("Processing {0}...".format(animation))
+    if os.path.exists(animation+'.gltf'):
+        ani_filename = animation+'.gltf'
+        output = 'GLTF'
+    elif os.path.exists(animation+'.glb'):
+        ani_filename = animation+'.glb'
+        output = 'GLB'
+    else:
+        print("Animation {} not found, skipping...".format(animation))
+        return False
+    ani_gltf = GLTF2().load(ani_filename)
+    if len(ani_filename.split('_')) > 1:
+        model_filename = ani_filename.split('_')[0]
+        if os.path.exists(model_filename+'.glb'):
+            model_gltf = GLTF2.load(model_filename+'.glb')
+        elif os.path.exists(model_filename+'.gltf'):
+            model_gltf = GLTF2.load(model_filename+'.gltf')
+        else:
+            print("Model {0}.glb/.gltf not found, skipping animation {1}...".format(model_filename, animation))
+            return False
+        new_model = apply_animations_to_model_gltf (model_gltf, ani_gltf, \
+            animation_metadata['animations'][animation]['locators'])
+        new_model.convert_buffers(BufferFormat.BINARYBLOB)
+        if output == 'GLB':
+            new_model.save_binary("{}.glb".format(animation))
+            return True
+        else:
+            new_model.save("{}.gltf".format(animation))
+            return True
 
 if __name__ == '__main__':
     # Set current directory
@@ -211,32 +224,9 @@ if __name__ == '__main__':
         os.chdir(os.path.dirname(sys.executable))
     else:
         os.chdir(os.path.abspath(os.path.dirname(__file__)))
-
-    # If argument given, attempt to export from file in argument
-    if len(sys.argv) > 1:
-        import argparse
-        parser = argparse.ArgumentParser()
-        parser.add_argument('model_filename', help="Name of model glb/gltf file with base model (required).")
-        parser.add_argument('new_animation_filename', help="Name of model glb/gltf file with new animation channels (required).")
-        args = parser.parse_args()
-        if os.path.exists(args.model_filename) and os.path.exists(args.new_animation_filename):
-            process_animation (args.model_filename, args.new_animation_filename)
-    else:
-        print("Note: only .glb/.gltf with single animations supported!")
-        model_filename = ''
-        while model_filename == '':
-            try:
-                m_input = str(input("GLTF Model with base animations: "))
-                if os.path.exists(m_input) and m_input.lower().split('.gl')[1] in ['tf', 'b']:
-                    model_filename = m_input
-            except:
-                pass
-        new_animation_filename = ''
-        while new_animation_filename == '':
-            try:
-                a_input = str(input("GLTF Model with additional animation channels: "))
-                if os.path.exists(a_input) and a_input.lower().split('.gl')[1] in ['tf', 'b']:
-                    new_animation_filename = a_input
-            except:
-                pass
-        process_animation(model_filename, new_animation_filename)
+    animation_metadata = {}
+    if os.path.exists("animation_metadata.json"):
+        with open("animation_metadata.json",'rb') as f:
+            animation_metadata = json.loads(f.read())
+        for animation in animation_metadata['animations']:
+            process_animation(animation, animation_metadata)
