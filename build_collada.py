@@ -112,7 +112,14 @@ def add_materials (collada, metadata, relative_path = '../../..', forward_render
             #Material
             setparam = ET.SubElement(instance_effect, 'setparam')
             setparam.set("ref", material + parameter)
-            values = ET.SubElement(setparam, 'float{0}'.format({1:'', 2:2, 3:3, 4:4, 5:5}[len(materials[material]['shaderParameters'][parameter])]))
+            try:
+                values = ET.SubElement(setparam,\
+                    'float{0}'.format({1:'', 2:2, 3:3, 4:4, 5:5}[len(materials[material]['shaderParameters'][parameter])]))
+            except KeyError:
+                print("KeyError: Material {0} parameter {1} has an invalid float{2}.".format(material, parameter,\
+                    len(materials[material]['shaderParameters'][parameter])))
+                input("Press Enter to abort.")
+                raise
             values.text = " ".join(["{0:g}".format(x) for x in materials[material]['shaderParameters'][parameter]])
             #Effect
             newparam = ET.SubElement(profile_HLSL, 'newparam')
