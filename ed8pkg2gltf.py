@@ -1946,6 +1946,8 @@ def load_shader_parameters(g, dict_data, cluster_header):
             shader_parameters[x['m_name']] = arr
             if x['m_name'] in dict_data['mu_tweakableShaderParameterDefinitionsObjectReferences']:
                 shader_parameters[x['m_name']] = dict_data['mu_tweakableShaderParameterDefinitionsObjectReferences'][x['m_name']]['m_id']
+            else:
+                shader_parameters[x['m_name']] = ''
         elif x['m_parameterType'] == 71:
             arr = array.array('I', parameter_buffer[parameter_offset:parameter_offset + parameter_size])
             if cluster_header.cluster_marker == NOEPY_HEADER_BE:

@@ -173,6 +173,10 @@ def add_materials (collada, metadata, relative_path = '../../..', forward_render
             border_color.text = '0 0 0 0' # In the example it's always this, and in the phyre file it's a single 0.  I dunno.
         # Texture parameters - only support for 2D currently
         for parameter in materials[material]['shaderTextures']:
+            if materials[material]['shaderTextures'][parameter] == '' or not os.path.exists(materials[material]['shaderTextures'][parameter]):
+                print("Warning: Material {0} parameter {1} has a missing texture: {2}.".format(material, parameter, materials[material]['shaderTextures'][parameter]))
+                print("Compile will likely fail, and the .pkg may crash the game.")
+                input("Press Enter to continue.")
             texture_name = materials[material]['shaderTextures'][parameter].replace('.DDS','.dds').split('/')[-1].split('.dds')[0]
             sampler_name = parameter + 'Sampler'
             if 'non2Dtextures' in materials[material].keys() and parameter in materials[material]['non2Dtextures'].keys() \
