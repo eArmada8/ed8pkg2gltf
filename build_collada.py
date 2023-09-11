@@ -1181,7 +1181,63 @@ def write_collada (collada, full_dae_path):
             f2.write(pretty_xml_as_string)
     return
 
-def build_collada (metadata_name):
+def get_gltf_name (animation):
+    if os.path.exists(animation+'.glb'):
+        filename = animation+'.glb'
+    elif os.path.exists(animation+'.gltf'):
+        filename = animation+'.gltf'
+    else:
+        print("Animation {} not found, skipping...".format(animation))
+        return False
+    return(filename)
+
+def get_gltf_heirarchy (animation):
+    filename = get_gltf_name(animation)
+    if not filename == False:
+        with open(filename, 'rb') as f:
+            if f.read(4) == b'glTF': #GLB format
+                num_sections, file_length = struct.unpack("<II", f.read(8))
+                for i in range(num_sections):
+                    section_start = f.tell()
+                    section_length, = struct.unpack("<I", f.read(4))
+                    section_magic = f.read(4)
+                    if section_magic == b'JSON':
+                        heirarchy = json.loads(f.read(section_length))['nodes']
+                    else:
+                        f.seek(section_length, 1)
+            else:
+                f.seek(0)
+                heirarchy = json.loads(f.read())['nodes']
+            return(heirarchy)
+    else:
+        return False
+
+def apply_gltf_pose (heirarchy, animation):
+    filename = get_gltf_name(animation)
+    if not filename == False:
+        ani_gltf = GLTF2().load(filename)
+    # Apply animation pose to model
+    for i in range(len(heirarchy)):
+        if heirarchy[i]['name'] in [x.name for x in ani_gltf.nodes]:
+            ani_node = [j for j in range(len(ani_gltf.nodes)) if ani_gltf.nodes[j].name == heirarchy[i]['name']][0]
+            for key in ['matrix', 'translation', 'rotation', 'scale']:
+                if key in heirarchy[i]:
+                    del(heirarchy[i][key])
+                if getattr(ani_gltf.nodes[ani_node], key) is not None:
+                    heirarchy[i][key] = getattr(ani_gltf.nodes[ani_node], key)
+    return(heirarchy)
+
+def add_animation_to_collada (collada, animation, animation_metadata):
+    filename = get_gltf_name(animation)
+    if not filename == False:
+        gltf = GLTF2().load(filename)
+        ani_struct, ani_times = extract_animation(gltf)
+        collada = add_animations(collada, gltf, ani_struct)
+        return (collada, ani_struct, ani_times)
+    else:
+        return False
+
+def build_collada (metadata_name, animation_metadata = {}):
     if os.path.exists(metadata_name):
         metadata = read_struct_from_json(metadata_name)
         print("Processing {0}...".format(metadata['pkg_name']))
@@ -1221,14 +1277,24 @@ def build_collada (metadata_name):
                 has_skeleton = True
                 skeletal_bones.extend(list(submeshes[i]['vgmap'].keys()))
         skeletal_bones = list(set(skeletal_bones))
+        ani_times = [0,8.33] #Default values, unclear if needed or should be 0,0?
         collada = basic_collada()
         images_data = sorted(list(set([x for y in metadata['materials'] for x in metadata['materials'][y]['shaderTextures'].values()])))
         collada = add_images(collada, images_data, relative_path)
         print("Adding materials...")
         collada = add_materials(collada, metadata, relative_path, forward_render = physics_present)
+        if 'animations' in animation_metadata and metadata['name'] in animation_metadata['animations']:
+            print("Adding animations...")
+            metadata['heirarchy'] = apply_gltf_pose(metadata['heirarchy'], metadata['name'])
+            collada, ani_struct, ani_times = add_animation_to_collada(collada, metadata['name'], animation_metadata)
+            skeletal_bones.extend(ani_struct.keys())
+            skeletal_bones = list(set(skeletal_bones))
+            if metadata['name'] in animation_metadata['animations'] and 'locators' in animation_metadata['animations'][metadata['name']]:
+                metadata['locators'].extend(animation_metadata['animations'][metadata['name']]['locators'])
+                metadata['locators'] = list(set(metadata['locators']))
         print("Adding skeleton...")
         skeleton = add_bone_info(metadata['heirarchy'], skeletal_bones = skeletal_bones)
-        collada = add_skeleton(collada, metadata, skeletal_bones = skeletal_bones)
+        collada = add_skeleton(collada, metadata, skeletal_bones = skeletal_bones, ani_times = ani_times)
         print("Adding geometry...")
         collada = add_geometries_and_controllers(collada, submeshes, skeleton, metadata['materials'], has_skeleton = has_skeleton)
         if physics_present == True:
@@ -1240,40 +1306,17 @@ def build_collada (metadata_name):
 def build_animation_collada (animation, animation_metadata):
     print("Processing {0}...".format(animation))
     metadata = {'name': animation, 'pkg_name': animation_metadata['pkg_name'], 'locators':[]}
-    if os.path.exists(metadata['name']+'.gltf'):
-        filename = metadata['name']+'.gltf'
-    elif os.path.exists(metadata['name']+'.glb'):
-        filename = metadata['name']+'.glb'
-    else:
-        print("Animation {} not found, skipping...".format(metadata['name']))
-        return False
-    gltf = GLTF2().load(filename)
-    dae_path = 'chr/chr/{0}'.format(metadata['name'].split('_')[0]) # Default name, to be overwritten by value in asset_D3D11.xml
-    if os.path.exists(metadata['pkg_name']+'/asset_D3D11.xml'):
-        xml_info, textures = asset_info_from_xml(metadata['pkg_name']+'/asset_D3D11.xml')
-        if metadata['name'] in xml_info:
-            dae_path = xml_info[metadata['name']]['dae_path']
-    with open(filename, 'rb') as f:
-        if f.read(4) == b'glTF': #GLB format
-            num_sections, file_length = struct.unpack("<II", f.read(8))
-            for i in range(num_sections):
-                section_start = f.tell()
-                section_length, = struct.unpack("<I", f.read(4))
-                section_magic = f.read(4)
-                if section_magic == b'JSON':
-                    heirarchy = json.loads(f.read(section_length))['nodes']
-                else:
-                    f.seek(section_length, 1)
-        else:
-            f.seek(0)
-            heirarchy = json.loads(f.read())['nodes']
-        metadata['heirarchy'] = heirarchy # Add heirarchy to metadata
+    metadata['heirarchy'] = get_gltf_heirarchy(animation)
     if animation in animation_metadata['animations'] and 'locators' in animation_metadata['animations'][animation]:
         metadata['locators'] = animation_metadata['animations'][animation]['locators']
+    dae_path = 'chr/chr/{0}'.format(animation.split('_')[0]) # Default name, to be overwritten by value in asset_D3D11.xml
+    if os.path.exists(animation_metadata['pkg_name']+'/asset_D3D11.xml'):
+        xml_info, textures = asset_info_from_xml(animation_metadata['pkg_name']+'/asset_D3D11.xml')
+        if animation in xml_info:
+            dae_path = xml_info[animation]['dae_path']
     collada = basic_collada()
     print("Adding animations...")
-    ani_struct, ani_times = extract_animation(gltf)
-    collada = add_animations(collada, gltf, ani_struct)
+    collada, ani_struct, ani_times = add_animation_to_collada(collada, animation, animation_metadata)
     print("Adding skeleton...")
     skeleton = add_bone_info(metadata['heirarchy'], skeletal_bones = list(ani_struct.keys()))
     collada = add_skeleton(collada, metadata, skeletal_bones = list(ani_struct.keys()), ani_times = ani_times)
@@ -1288,17 +1331,19 @@ if __name__ == '__main__':
         os.chdir(os.path.abspath(os.path.dirname(__file__)))
     models = glob.glob("metadata*.json")
     metadata_list = []
+    if os.path.exists("animation_metadata.json"):
+        animation_metadata = read_struct_from_json("animation_metadata.json")
+    else:
+        animation_metadata = {}
     if len(models) > 0:
         for i in range(len(models)):
-            build_collada(models[i])
+            build_collada(models[i], animation_metadata)
         metadata_list.extend([read_struct_from_json(x) for x in models])
         print("Writing shader file...")
         write_shader([x['materials'] for x in metadata_list])
-    animation_metadata = {}
     new_times = {}
-    if os.path.exists("animation_metadata.json"):
-        animation_metadata = read_struct_from_json("animation_metadata.json")
-        for animation in animation_metadata['animations']:
+    if 'animations' in animation_metadata:
+        for animation in [x for x in animation_metadata['animations'] if not x in [x['name'] for x in metadata_list]]:
             ani_times = build_animation_collada (animation, animation_metadata)
             if ani_times is not False:
                 metadata_list.append({'name': animation, 'pkg_name': animation_metadata['pkg_name'], 'materials': []})
