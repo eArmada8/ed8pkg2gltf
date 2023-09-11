@@ -3595,8 +3595,9 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
                         if vvv['m_name'] == 'm_currentPose':
                             instance_obj = vvv['m_instanceObject']
                             if instance_obj != None:
-                                if 'mu_gltfSkinMatrixIndexToNode' in instance_obj:
-                                    target['node'] = instance_obj['mu_gltfSkinMatrixIndexToNode'][vvv['m_index']]
+                                target_node = [x['m_buffer'] for x in instance_obj['m_mesh']['m_matrixNames']['m_els']][vvv['m_index']]
+                                node_list = {v['m_name']:v['mu_gltfNodeIndex'] for v in cluster_mesh_info.data_instances_by_class['PNode']}
+                                target['node'] = node_list[target_node]
                     channel['target'] = target
                     sampler = {}
                     sampler['input'] = vvv['m_times']['mu_gltfAccessorIndex']
