@@ -3720,41 +3720,43 @@ def process_pkg(pkg_name, partialmaps = partial_vgmaps_default, allbuffers = Fal
         if (overwrite == True) or not os.path.exists(pkg_name[:-4]):
             if not os.path.exists(pkg_name[:-4]):
                 os.mkdir(pkg_name[:-4])
-        allowed_write_extensions = ['.glb', '.json', '.dds', '.xml', '.phyre']
-        storage_media = TSpecialOverlayMedia(os.path.realpath(pkg_name), allowed_write_extensions)
-        items = []
+            allowed_write_extensions = ['.glb', '.json', '.dds', '.xml', '.phyre']
+            storage_media = TSpecialOverlayMedia(os.path.realpath(pkg_name), allowed_write_extensions)
+            items = []
 
-        def list_callback(item):
-            if item[-10:-6] == '.dae':
-                items.append(item)
-        storage_media.get_list_at('.', list_callback)
-        if len(items) == 0:
-
-            def list_callback2(item):
-                if item[-10:-6] in ['.dds', '.png', '.bmp']:
+            def list_callback(item):
+                if item[-10:-6] == '.dae':
                     items.append(item)
-            storage_media.get_list_at('.', list_callback2)
-        for i in range(len(items)):
-            print("Parsing {0}...".format(items[i]))
-            parse_cluster(items[i], None, storage_media, pkg_name[:-4], partialmaps = partialmaps, allbuffers = allbuffers, item_num=i)
+            storage_media.get_list_at('.', list_callback)
+            if len(items) == 0:
 
-        build_items = []
-        def list_build_items_callback(item):
-            if item[-4:] == '.xml' or item[-42:-38] == '.fx#' or item[-9:-6] == '.fx':
-                build_items.append(item)
-        storage_media.get_list_at('.', list_build_items_callback)
-        if not os.path.exists(pkg_name[:-4] + '/' + pkg_name[:-4]):
-            os.makedirs(pkg_name[:-4] + '/' + pkg_name[:-4])
-        for i in range(len(build_items)):
-            with storage_media.open(build_items[i], 'rb') as f:
-                with open(pkg_name[:-4] + '/' + pkg_name[:-4] + '/' + build_items[i], 'wb') as ff:
-                    ff.write(f.read())
+                def list_callback2(item):
+                    if item[-10:-6] in ['.dds', '.png', '.bmp']:
+                        items.append(item)
+                storage_media.get_list_at('.', list_callback2)
+            for i in range(len(items)):
+                print("Parsing {0}...".format(items[i]))
+                parse_cluster(items[i], None, storage_media, pkg_name[:-4], partialmaps = partialmaps, allbuffers = allbuffers, item_num=i)
 
-        if len(animation_metadata) > 0:
-            with open(pkg_name[:-4] + '/' + 'animation_metadata.json', 'wb') as f:
-                f.write(json.dumps({'pkg_name': pkg_name[:-4], 'animations': animation_metadata}, indent=4).encode("utf-8"))
+            build_items = []
+            def list_build_items_callback(item):
+                if item[-4:] == '.xml' or item[-42:-38] == '.fx#' or item[-9:-6] == '.fx':
+                    build_items.append(item)
+            storage_media.get_list_at('.', list_build_items_callback)
+            if not os.path.exists(pkg_name[:-4] + '/' + pkg_name[:-4]):
+                os.makedirs(pkg_name[:-4] + '/' + pkg_name[:-4])
+            for i in range(len(build_items)):
+                with storage_media.open(build_items[i], 'rb') as f:
+                    with open(pkg_name[:-4] + '/' + pkg_name[:-4] + '/' + build_items[i], 'wb') as ff:
+                        ff.write(f.read())
 
-        return
+            if len(animation_metadata) > 0:
+                with open(pkg_name[:-4] + '/' + 'animation_metadata.json', 'wb') as f:
+                    f.write(json.dumps({'pkg_name': pkg_name[:-4], 'animations': animation_metadata}, indent=4).encode("utf-8"))
+
+            return
+        else:
+            return
     raise Exception('Passed in file is not compatible file')
 
 if __name__ == '__main__':
