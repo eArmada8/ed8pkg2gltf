@@ -3646,6 +3646,8 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
     cluster_mesh_info.gltf_data['accessors'] = accessors
     if 'PLocator' in cluster_mesh_info.data_instances_by_class:
         metadata_json['locators'] = [x['mu_name'] for x in cluster_mesh_info.data_instances_by_class['PLocator']]
+    else:
+        metadata_json['locators'] = []
     if 'PPhysicsModel' in cluster_mesh_info.data_instances_by_class:
         def ok_json(obj):
             try:
