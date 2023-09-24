@@ -310,7 +310,15 @@ def add_materials (collada, metadata, relative_path = '../../..', forward_render
     return(collada)
 
 def calc_abs_matrix(node, skeleton, skeletal_bones = []):
-    skeleton[node]['abs_matrix'] = numpy.dot(skeleton[skeleton[node]['parent']]['abs_matrix'], skeleton[node]['rel_matrix'])
+    try:
+        skeleton[node]['abs_matrix'] = numpy.dot(skeleton[skeleton[node]['parent']]['abs_matrix'], skeleton[node]['rel_matrix'])
+    except KeyError:
+        children_list = {i:skeleton[i]['children'] if 'children' in skeleton[i].keys() else [] for i in range(len(skeleton))}
+        parent_list = ", ".join([skeleton[i]['name'] for i in children_list if node in children_list[i]])
+        print("KeyError: {0} is missing abs_matrix.  This is often due to an invalid parent assignment!".format(skeleton[node]['name']))
+        print("Detected parent(s) of {0}: {1}.".format(skeleton[node]['name'], parent_list))
+        input("Press Enter to abort.")
+        raise
     try:
         skeleton[node]['inv_matrix'] = numpy.linalg.inv(skeleton[node]['abs_matrix'])
     except numpy.linalg.LinAlgError:
