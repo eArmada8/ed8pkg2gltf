@@ -3380,6 +3380,7 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
     lights = []
     if 'PLight' in cluster_mesh_info.data_instances_by_class:
         light_type_map = {'DirectionalLight': 'directional', 'PointLight': 'point', 'SpotLight': 'spot'}
+        metadata_json['lights'] = {}
         for v in cluster_mesh_info.data_instances_by_class['PLight']:
             if v['m_lightType'] in light_type_map:
                 light = {}
@@ -3402,6 +3403,11 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
                     light['range'] = v['m_outerRange']
                 v['mu_gltfLightIndex'] = len(lights)
                 lights.append(light)
+            light_data = { 'type': v['m_lightType'] }
+            light_params = {key:v[key] for key in \
+                [k for k in v if (isinstance(v[k], float) or (isinstance(v[k], dict) and 'm_elements' in v[k]))]}
+            light_data.update({key:value if isinstance(value,float) else list(value['m_elements']) for (key,value) in light_params.items()})
+            metadata_json['lights'][v['mu_name']] = light_data
     if len(lights) > 0:
         KHR_lights_punctual = {}
         KHR_lights_punctual['lights'] = lights
