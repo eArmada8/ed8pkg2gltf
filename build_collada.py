@@ -372,6 +372,7 @@ def add_bone_info (skeleton, skeletal_bones = []):
         skeleton[i]['num_descendents'] = 0
     for node in top_nodes:
         skeleton[node]['abs_matrix'] = skeleton[node]['rel_matrix']
+        skeleton[node]['inv_matrix'] = numpy.linalg.inv(skeleton[node]['abs_matrix'])
         if 'children' in skeleton[node].keys():
             for child in skeleton[node]['children']:
                 skeleton = calc_abs_matrix(child, skeleton, skeletal_bones = skeletal_bones)
@@ -505,6 +506,10 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has
         # Whichever child of the top node with the most descendents wins and is crowned the skeleton
         skeleton_id = num_kids[sorted(num_kids.keys(), reverse=True)[0]]
         skeleton_name = skeleton[skeleton_id]['name']
+        if skeleton_name.lower() not in ['up_point', 'root']:
+            print("Warning!  Skeleton detection likely failed, as it is not up_point or root!  Defaulting to top node.")
+            skeleton_id = [i for i in range(len(skeleton)) if skeleton[i]['name'] == library_visual_scenes[0].attrib['id']][0]
+            skeleton_name = skeleton[skeleton_id]['name']
         joint_list = get_joint_list(skeleton_id, [x for y in [x['vgmap'].keys() for x in submeshes] for x in y]+[skeleton_name], skeleton)
         bone_dict = get_bone_dict(skeleton)
     for submesh in submeshes:
@@ -580,7 +585,7 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has
                         except KeyError:
                             try:
                                 missing_bone = [x for x in submesh['vgmap'].keys() if submesh['vgmap'][x] == blendindices[i][j]][0]
-                                print("KeyError: Attempted to map {1} to skeleton while adding submesh {0} to COLLADA, but {1} does not exist in the heirachy!".format(submesh["name"], missing_bone))
+                                print("KeyError: Attempted to map {1} to skeleton while adding submesh {0} to COLLADA, but {1} does not exist in the hierarchy!".format(submesh["name"], missing_bone))
                                 input("Press Enter to abort.")
                                 raise
                             except IndexError:
