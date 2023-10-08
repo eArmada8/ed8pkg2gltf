@@ -3726,6 +3726,7 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
 
 def process_pkg(pkg_name, partialmaps = partial_vgmaps_default, allbuffers = False, gltf_nonbinary = False, overwrite = False):
     global animation_metadata
+    animation_metadata = {}
     storage_media = None
     print("Processing {0}...".format(pkg_name))
     if file_is_ed8_pkg(pkg_name):
