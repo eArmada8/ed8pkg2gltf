@@ -66,6 +66,12 @@ Shows help message.
 `-p, --partialmaps`
 The default behavior of the script is to provide meshes and .vgmap files with the entire skeleton and every bone available to each mesh.  This will result in many empty vertex groups upon import into Blender.  (All empty groups will be removed at the time of compilation.)  This option will preserve the original mapping with the exact original indexing (such that the .vgmaps would correspond to and be compatible with buffers taken out of GPU memory, e.g. when using 3DMigoto).
 
+`-a, --allbuffers`
+The default behavior of the script is to write no more than 8 sets of texcoord/tangent/binormal to the .vb files, as the plugin cannot accommodate more than 8.  This option will result in the dumping all the buffers.  (This is meant for debugging, I have never seen any useful information in the upper buffers.)
+
+`-t, --gltf_nonbinary`
+Output glTF files in .gltf format, instead of .glb format.
+  
 `-o, --overwrite`
 Overwrite existing files without prompting.
 
