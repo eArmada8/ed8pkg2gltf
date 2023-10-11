@@ -885,6 +885,8 @@ def add_physics (collada, physics_metadata):
 # We can maintain ability to extract multiple indices, although phyreEngine only has single animations so i=0 always
 def extract_animation (gltf, i = 0, start_at_time_zero = False):
     ani_bones = sorted(list(set([x.target.node for x in gltf.animations[i].channels])))
+    if len(ani_bones) < 1:
+        return({}, [0,0])
     ani_starttime = min([x for y in [x for y in gltf.animations[i].samplers for x in read_gltf_stream(gltf, y.input)] for x in y])
     ani_endtime = max([x for y in [x for y in gltf.animations[i].samplers for x in read_gltf_stream(gltf, y.input)] for x in y])
     if start_at_time_zero == False:
@@ -1248,7 +1250,7 @@ def add_animation_to_collada (collada, animation, animation_metadata):
         collada = add_animations(collada, gltf, ani_struct)
         return (collada, ani_struct, ani_times)
     else:
-        return False
+        return collada, {}, [0,0]
 
 def build_collada (metadata_name, animation_metadata = {}):
     if os.path.exists(metadata_name):
@@ -1330,6 +1332,8 @@ def build_animation_collada (animation, animation_metadata):
     collada = basic_collada()
     print("Adding animations...")
     collada, ani_struct, ani_times = add_animation_to_collada(collada, animation, animation_metadata)
+    if len(ani_struct) < 1:
+        return False
     print("Adding skeleton...")
     skeleton = add_bone_info(metadata['heirarchy'], skeletal_bones = list(ani_struct.keys()))
     collada = add_skeleton(collada, metadata, skeletal_bones = list(ani_struct.keys()), ani_times = ani_times)
