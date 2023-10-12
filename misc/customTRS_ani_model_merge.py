@@ -10,8 +10,9 @@ from pyquaternion import Quaternion
 preserve_translation = False
 preserve_rotation = False
 preserve_scale = False
-# If True, locators will be transformed regardless of above
+# If True, locators will be transformed regardless of above.  Nodes in always_transform_nodes will always be applied. 
 always_transform_locators = True
+always_transform_nodes = ['up_point']
 
 def read_gltf_stream (gltf, accessor_num):
     accessor = gltf.accessors[accessor_num]
@@ -44,8 +45,9 @@ def read_gltf_stream (gltf, accessor_num):
 
 def apply_animations_to_model_gltf (model_gltf, ani_gltf, locators):
     global preserve_translation, preserve_rotation, preserve_scale
-    global always_transform_locators
+    global always_transform_locators, always_transform_nodes
 
+    transformed_model = False # To detect animations not affected by model (e.g. S-craft cameras)
     # Apply animation pose to model
     for i in range(len(model_gltf.nodes)):
         if model_gltf.nodes[i].name in [x.name for x in ani_gltf.nodes]:
@@ -99,11 +101,14 @@ def apply_animations_to_model_gltf (model_gltf, ani_gltf, locators):
                 else:
                     anipose_s_mtx = numpy.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]])
             # Overwrite model pose with animation pose per global variable preference
-                if preserve_translation == False or (model_gltf.nodes[i].name in locators and always_transform_locators == True):
+                if preserve_translation == False or (model_gltf.nodes[i].name in locators and always_transform_locators == True) \
+                    or (model_gltf.nodes[i].name in always_transform_nodes):
                     t_mtx = anipose_t_mtx
-                if preserve_rotation == False or (model_gltf.nodes[i].name in locators and always_transform_locators == True):
+                if preserve_rotation == False or (model_gltf.nodes[i].name in locators and always_transform_locators == True) \
+                    or (model_gltf.nodes[i].name in always_transform_nodes):
                     r_mtx = anipose_r_mtx
-                if preserve_scale == False or (model_gltf.nodes[i].name in locators and always_transform_locators == True):
+                if preserve_scale == False or (model_gltf.nodes[i].name in locators and always_transform_locators == True) \
+                    or (model_gltf.nodes[i].name in always_transform_nodes):
                     s_mtx = anipose_s_mtx
             #Delete current model (bind) pose
             for key in ['matrix', 'translation', 'rotation', 'scale']:
@@ -133,7 +138,9 @@ def apply_animations_to_model_gltf (model_gltf, ani_gltf, locators):
             target_path = ani_gltf.animations[i].channels[j].target.path
             target_node_name = ani_gltf.nodes[ani_gltf.animations[i].channels[j].target.node].name
             if target_node_name in [x.name for x in model_gltf.nodes] \
-                and (target_path in allowed_transforms or (target_node_name in locators and always_transform_locators == True)):
+                and (target_path in allowed_transforms or (target_node_name in locators and always_transform_locators == True) \
+                or (target_node_name in always_transform_nodes)):
+                transformed_model = True
                 target_node = [k for k in range(len(model_gltf.nodes)) if model_gltf.nodes[k].name == target_node_name][0]
                 ani_sampler = AnimationSampler()
                 blobdata = numpy.array(sampler_input,dtype="float32").tobytes()
@@ -185,7 +192,10 @@ def apply_animations_to_model_gltf (model_gltf, ani_gltf, locators):
         model_gltf.animations.append(animation)
     model_gltf.buffers[0].byteLength = blob_len
     model_gltf.set_binary_blob(binary_blob)
-    return(model_gltf)
+    if transformed_model:
+        return(model_gltf)
+    else:
+        return(ani_gltf)
 
 def process_animation (animation, animation_metadata):
     print("Processing {0}...".format(animation))
