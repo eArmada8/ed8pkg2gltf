@@ -12,7 +12,7 @@ The original phyre asset decompiler is written by Julian Uy (github.com/uyjulian
 ## Requirements:
 1. Python 3.9 or newer is required for use of this script.  It is free from the Microsoft Store, for Windows users.  For Linux users, please consult your distro.
 2. Mumpy, pyquaternion and pygltflib are required by build_collada as well as the glTF mesh exporter.  The zstandard module for python is needed for decompiling zstandard-compressed pkgs.  The lz4 module is used for compressing compiled .pkgs.  Install all of these by running the included install_python_modules.bat or by typing "python3 -m pip install zstandard numpy pyquaternion pygltflib" in the command line / shell.
-3. The output can be imported into Blender using DarkStarSword's amazing plugin: https://github.com/DarkStarSword/3d-fixes/blob/master/blender_3dmigoto.py
+3. The output can be imported into Blender using DarkStarSword's amazing plugin: https://github.com/DarkStarSword/3d-fixes/blob/master/blender_3dmigoto.py (tested on commit [c6daca9](https://raw.githubusercontent.com/DarkStarSword/3d-fixes/c6daca90d64b0fb53f2ebf70806e539b8007d328/blender_3dmigoto.py))
 4. Compilation is dependent on the phyre Engine tools from [here](https://github.com/Trails-Research-Group/Doc/releases/download/v0.0/WorkFolder.zip), as described on the [tutorial from the Trails-Research-Group](https://github.com/Trails-Research-Group/Doc/wiki/How-to:-Import-custom-models-to-Cold-Steel-IV).  (You do not need the tutorial for basic mods, just the tools.)  The tools require [the Windows SDK](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/).
 
 ## Usage:
