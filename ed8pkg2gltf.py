@@ -3194,7 +3194,7 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
                 material['normalTexture'] = normalTextureInfo
             v['mu_gltfMaterialIndex'] = len(materials)
             materials.append(material)
-            if 'dae' in cluster_mesh_info.filename and 'Skinned' not in v['mu_materialname']:
+            if 'dae' in cluster_mesh_info.filename and v['mu_materialname'][-8:] != '-Skinned':
                 material = {}
                 material['shader'] = v['m_parameterBuffer']['m_effectVariant']['m_id']
                 skinned_material = [x for x in cluster_mesh_info.data_instances_by_class['PMaterial'] if x['mu_materialname'] == v['mu_materialname']+'-Skinned']
