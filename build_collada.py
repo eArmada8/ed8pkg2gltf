@@ -66,8 +66,8 @@ def add_images (collada, images, relative_path = '../../..'):
     for image in images:
         image_name = image.replace('.DDS','.dds').split('.dds')[0]
         image_element = ET.SubElement(library_images, 'image')
-        image_element.set("id", os.path.basename(image_name))
-        image_element.set("name", os.path.basename(image_name))
+        image_element.set("id", os.path.basename(image_name)+'_Image')
+        image_element.set("name", os.path.basename(image_name)+'_Image')
         image_element_init_from = ET.SubElement(image_element, 'init_from')
         image_element_init_from.text = relative_path + '/' + image
         image_element_extra = ET.SubElement(image_element, 'extra')
@@ -218,7 +218,7 @@ def add_materials (collada, metadata, relative_path = '../../..', forward_render
             init_from = ET.SubElement(surface, 'init_from')
             init_from.set("mip", "0")
             init_from.set("slice", "0")
-            init_from.text = texture_name
+            init_from.text = texture_name + '_Image'
             texformat = ET.SubElement(surface, 'format')
             texformat.text = "A8R8G8B8"
             #Effect
@@ -765,7 +765,7 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has
             texture_name = material['shaderTextures'][parameter].replace('.DDS','.dds').split('/')[-1].split('.dds')[0]
             bind = ET.SubElement(instance_material, 'bind')
             bind.set("semantic", parameter)
-            bind.set("target", texture_name + '-lib/outColor')
+            bind.set("target", texture_name + '_Image-lib/outColor')
             extra = ET.SubElement(bind, 'extra')
             technique = ET.SubElement(extra, 'technique')
             technique.set('profile', 'PSSG')
