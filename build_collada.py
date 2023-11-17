@@ -402,43 +402,50 @@ def get_bone_dict (skeleton):
 
 # Recursive function to fill out the entire node tree; call with the first node and i = 0
 def get_children (parent_node, i, metadata, skeletal_bones = []):
-    node = ET.SubElement(parent_node, 'node')
-    node.set('id', metadata['heirarchy'][i]['name'])
-    node.set('name', metadata['heirarchy'][i]['name'])
-    node.set('sid', metadata['heirarchy'][i]['name'])
-    if 'rel_matrix' in metadata['heirarchy'][i]:
-        matrix = ET.SubElement(node, 'matrix')
-        matrix.set('sid','transform')
-        matrix.text = " ".join(["{0}".format(x) for x in metadata['heirarchy'][i]['rel_matrix'].flatten('C')])
-    if metadata['heirarchy'][i]['name'] in skeletal_bones:
-        node.set('type', 'JOINT')
+    if not metadata['heirarchy'][i]['name'] == parent_node.attrib['name']:
+        node = ET.SubElement(parent_node, 'node')
+        node.set('id', metadata['heirarchy'][i]['name'])
+        node.set('name', metadata['heirarchy'][i]['name'])
+        node.set('sid', metadata['heirarchy'][i]['name'])
+        if 'rel_matrix' in metadata['heirarchy'][i]:
+            matrix = ET.SubElement(node, 'matrix')
+            matrix.set('sid','transform')
+            matrix.text = " ".join(["{0}".format(x) for x in metadata['heirarchy'][i]['rel_matrix'].flatten('C')])
+        if metadata['heirarchy'][i]['name'] in skeletal_bones:
+            node.set('type', 'JOINT')
+            extra = ET.SubElement(node, 'extra')
+            technique = ET.SubElement(extra, 'technique')
+            technique.set('profile','PSSG')
+            translate_keyed = ET.SubElement(technique, 'translate_keyed')
+            rotate_keyed = ET.SubElement(technique, 'rotate_keyed')
+            scale_keyed = ET.SubElement(technique, 'scale_keyed')
+        else:
+            node.set('type', 'NODE')
+        if 'children' in metadata['heirarchy'][i].keys():
+            for j in range(len(metadata['heirarchy'][i]['children'])):
+                if metadata['heirarchy'][i]['children'][j] < len(metadata['heirarchy']):
+                    get_children(node, metadata['heirarchy'][i]['children'][j], metadata, skeletal_bones = skeletal_bones)
         extra = ET.SubElement(node, 'extra')
         technique = ET.SubElement(extra, 'technique')
-        technique.set('profile','PSSG')
-        translate_keyed = ET.SubElement(technique, 'translate_keyed')
-        rotate_keyed = ET.SubElement(technique, 'rotate_keyed')
-        scale_keyed = ET.SubElement(technique, 'scale_keyed')
+        if 'locators' in metadata.keys() and metadata['heirarchy'][i]['name'] in metadata['locators']:
+            technique.set('profile', 'PHYRE')
+            locator = ET.SubElement(technique, 'locator')
+            locator.text = '1'
+        else:
+            technique.set('profile', 'MAYA')
+            dynamic_attributes = ET.SubElement(technique, 'dynamic_attributes')
+            filmboxTypeID = ET.SubElement(dynamic_attributes, 'filmboxTypeID')
+            filmboxTypeID.set('short_name', 'filmboxTypeID')
+            filmboxTypeID.set('type', 'int')
+            filmboxTypeID.text = '5'
+            segment_scale_compensate = ET.SubElement(technique, 'segment_scale_compensate')
+            segment_scale_compensate.text = '0'
     else:
-        node.set('type', 'NODE')
-    if 'children' in metadata['heirarchy'][i].keys():
-        for j in range(len(metadata['heirarchy'][i]['children'])):
-            if metadata['heirarchy'][i]['children'][j] < len(metadata['heirarchy']):
-                get_children(node, metadata['heirarchy'][i]['children'][j], metadata, skeletal_bones = skeletal_bones)
-    extra = ET.SubElement(node, 'extra')
-    technique = ET.SubElement(extra, 'technique')
-    if 'locators' in metadata.keys() and metadata['heirarchy'][i]['name'] in metadata['locators']:
-        technique.set('profile', 'PHYRE')
-        locator = ET.SubElement(technique, 'locator')
-        locator.text = '1'
-    else:
-        technique.set('profile', 'MAYA')
-        dynamic_attributes = ET.SubElement(technique, 'dynamic_attributes')
-        filmboxTypeID = ET.SubElement(dynamic_attributes, 'filmboxTypeID')
-        filmboxTypeID.set('short_name', 'filmboxTypeID')
-        filmboxTypeID.set('type', 'int')
-        filmboxTypeID.text = '5'
-        segment_scale_compensate = ET.SubElement(technique, 'segment_scale_compensate')
-        segment_scale_compensate.text = '0'
+        # Duplicated child node detected, do not process except to add children to the parent node
+        if 'children' in metadata['heirarchy'][i].keys():
+            for j in range(len(metadata['heirarchy'][i]['children'])):
+                if metadata['heirarchy'][i]['children'][j] < len(metadata['heirarchy']):
+                    get_children(parent_node, metadata['heirarchy'][i]['children'][j], metadata, skeletal_bones = skeletal_bones)
     return
 
 # Used to add an empty node to visual scene if no node can be found to attach geometry
@@ -500,16 +507,16 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has
     if has_skeleton == True:
         library_controllers = ET.SubElement(collada, 'library_controllers')
         library_visual_scenes = collada.find('library_visual_scenes')
-        top_node_children = [x['children'] for x in skeleton if x['name'] == library_visual_scenes[0].attrib['id']][0] # Children of top node
-        # I know this results in some overwriting but it does not matter, we are just trying to identify the child of the top node that is the skeleton
-        num_kids = {skeleton[x]['num_descendents']:x for x in top_node_children}
-        # Whichever child of the top node with the most descendents wins and is crowned the skeleton
-        skeleton_id = num_kids[sorted(num_kids.keys(), reverse=True)[0]]
-        skeleton_name = skeleton[skeleton_id]['name']
-        if skeleton_name.lower() not in ['up_point', 'root']:
-            print("Warning!  Skeleton detection likely failed, as it is not up_point or root!  Defaulting to top node.")
-            skeleton_id = [i for i in range(len(skeleton)) if skeleton[i]['name'] == library_visual_scenes[0].attrib['id']][0]
-            skeleton_name = skeleton[skeleton_id]['name']
+        base_node = [child for child in library_visual_scenes[0] if child.tag == 'node'][0]
+        children_of_top_node = {base_node[i].attrib['name']:i for i in range(len(base_node)) if base_node[i].tag == 'node'}
+        if 'up_point' in children_of_top_node:
+            skeleton_name = 'up_point'
+        elif 'root' in children_of_top_node:
+            skeleton_name = 'root'
+        else:
+            print("Warning!  Skeleton detection likely failed, as it is not up_point or root (case-sensitive)!  Defaulting to top node.")
+            skeleton_name = base_node.attrib['name']
+        skeleton_id = [i for i in range(len(skeleton)) if skeleton[i]['name'] == skeleton_name][0]
         joint_list = get_joint_list(skeleton_id, [x for y in [x['vgmap'].keys() for x in submeshes] for x in y]+[skeleton_name], skeleton)
         bone_dict = get_bone_dict(skeleton)
     for submesh in submeshes:
