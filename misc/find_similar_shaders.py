@@ -21,6 +21,7 @@ class Shader_db:
         self.shader_sig = {x[0]:''.join(x[4:]) for x in self.shader_array[1:]}
         self.diffs = {}
         self.restriction = ''
+        self.restriction_column = None
         self.restricted_list = [x[0] for x in self.shader_array[1:]]
         self.report = ''
 
@@ -32,9 +33,10 @@ class Shader_db:
     def set_restricted_list (self, restriction):
         if restriction in self.shader_array[0][1:4]:
             self.restriction = restriction
-            restriction_column = self.shader_array[0].index(restriction)
-            self.restricted_list = [x[0] for x in self.shader_array[1:] if x[restriction_column] != 'None']
+            self.restriction_column = self.shader_array[0].index(restriction)
+            self.restricted_list = [x[0] for x in self.shader_array[1:] if x[self.restriction_column] != 'None']
         else:
+            self.restriction_column = None
             self.restricted_list = [x[0] for x in self.shader_array[1:]]
         return
 
@@ -53,12 +55,18 @@ class Shader_db:
         self.report = 'Original Shader: {0}\n'.format(shader)
         if self.restriction != '':
             self.report += '\nRestriction: {} is not None\n'.format(self.restriction)
+        array_first_column = [x[0] for x in self.shader_array]
         for i in self.diffs:
             if len([j for j in self.diffs[i] if j in self.restricted_list]) > 0:
                 self.report += '\nShaders with {} differences:\n\n'.format(i)
                 for j in self.diffs[i]:
                     if j in self.restricted_list:
-                        self.report += '{}:\n'.format(j)
+                        self.report += '{}:'.format(j)
+                        if self.restriction_column != None:
+                            row = array_first_column.index(j)
+                            self.report += ' (available in {})\n'.format(self.shader_array[row][self.restriction_column])
+                        else:
+                            self.report += '\n'
                         self.report += '\n'.join(['{0}: {1}'.format(k,v) for (k,v)\
                             in self.diffs[i][j].items()]) + '\n\n'
         return(self.report)
