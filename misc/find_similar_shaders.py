@@ -54,12 +54,13 @@ class Shader_db:
         if self.restriction != '':
             self.report += '\nRestriction: {} is not None\n'.format(self.restriction)
         for i in self.diffs:
-            self.report += '\nShaders with {} differences:\n\n'.format(i)
-            for j in self.diffs[i]:
-                if j in self.restricted_list:
-                    self.report += '{}:\n'.format(j)
-                    self.report += '\n'.join(['{0}: {1}'.format(k,v) for (k,v)\
-                        in self.diffs[i][j].items()]) + '\n\n'
+            if len([j for j in self.diffs[i] if j in self.restricted_list]) > 0:
+                self.report += '\nShaders with {} differences:\n\n'.format(i)
+                for j in self.diffs[i]:
+                    if j in self.restricted_list:
+                        self.report += '{}:\n'.format(j)
+                        self.report += '\n'.join(['{0}: {1}'.format(k,v) for (k,v)\
+                            in self.diffs[i][j].items()]) + '\n\n'
         return(self.report)
 
     def generate_report(self, shader):
