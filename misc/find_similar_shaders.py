@@ -89,6 +89,7 @@ if __name__ == "__main__":
         while not restriction in ['']+shader_db.shader_array[0][1:4]:
             restriction = input("Invalid entry. Please enter game restriction [{}, or blank for None]: ".format(', '.join(shader_db.shader_array[0][1:4])))
         shader_db.set_restricted_list(restriction)
+        shader_db.report_file = 'report_{0}_{1}.txt'.format(shader_db.restriction,shader)
         shader_db.generate_report(shader)
     else:
         input("{} is missing!  Press Enter to abort.".format(csv_file))
