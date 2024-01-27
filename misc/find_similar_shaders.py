@@ -1,24 +1,14 @@
 # ED8 shader finder.  Give the filename of a shader e.g. 'ed8_chr.fx#43908C853D966A373118677862503A56'
 # and it will search the database (by default 'ed8_chr_switches.csv', set below) to generate a report
-# of the other switches, ranked by similarity.
+# of the other switches, ranked by similarity.  Requires Python 3.10 or newer.
 #
-# Requires ed8_chr_switches.csv (or ed8_map_switches.csv if line 21 is changed), obtain from
+# Requires ed8_chr_switches.csv (or ed8_map_switches.csv if line 13 is changed), obtain from
 # https://github.com/eArmada8/ed8pkg2gltf/raw/main/doc/game_transfer_img/ed8_chr_switches.csv
 # https://github.com/eArmada8/ed8pkg2gltf/raw/main/doc/game_transfer_img/ed8_map_switches.csv
 #
-# Requires the Levenshtein python module.
-# This can be installed by:
-# /path/to/python3 -m pip install Levenshtein
-#
 # GitHub eArmada8/ed8pkg2gltf
 
-try:
-    import os, csv
-    from Levenshtein import distance as levenshtein_distance
-except ModuleNotFoundError as e:
-    print("Python module missing! {}".format(e.msg))
-    input("Press Enter to abort.")
-    raise   
+import os, csv
 
 csv_file = 'ed8_chr_switches.csv'
 
@@ -55,7 +45,7 @@ class Shader_db:
         return({self.shader_switches[i]:string2[i] for i in differences})
 
     def sort_shaders_by_similarity(self, shader):
-        shader_diff = {k:levenshtein_distance(self.shader_sig[k], self.shader_sig[shader]) \
+        shader_diff = {k:(int(self.shader_sig[k], base=2) ^ int(self.shader_sig[shader], base=2)).bit_count() \
             for k in self.shader_sig if k != shader}
         diff_val = sorted(list(set(shader_diff.values())))
         self.diffs = {diff_val[i]:{x:self.diff(shader,x) for x in shader_diff if shader_diff[x] == diff_val[i]}\
