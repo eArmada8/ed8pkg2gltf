@@ -891,7 +891,7 @@ def add_physics (collada, physics_metadata):
 
 # We can maintain ability to extract multiple indices, although phyreEngine only has single animations so i=0 always
 def extract_animation (gltf, i = 0, start_at_time_zero = False):
-    ani_bones = sorted(list(set([x.target.node for x in gltf.animations[i].channels])))
+    ani_bones = sorted(list(set([x.target.node for x in gltf.animations[i].channels if x.target.node is not None])))
     if len(ani_bones) < 1:
         return({}, [0,0])
     ani_starttime = min([x for y in [x for y in gltf.animations[i].samplers for x in read_gltf_stream(gltf, y.input)] for x in y])
