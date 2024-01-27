@@ -1,0 +1,103 @@
+# ED8 shader finder.  Give the filename of a shader e.g. 'ed8_chr.fx#43908C853D966A373118677862503A56'
+# and it will search the database (by default 'ed8_chr_switches.csv', set below) to generate a report
+# of the other switches, ranked by similarity.
+#
+# Requires ed8_chr_switches.csv (or ed8_map_switches.csv if line 21 is changed), obtain from
+# https://github.com/eArmada8/ed8pkg2gltf/raw/main/doc/game_transfer_img/ed8_chr_switches.csv
+# https://github.com/eArmada8/ed8pkg2gltf/raw/main/doc/game_transfer_img/ed8_map_switches.csv
+#
+# Requires the Levenshtein python module.
+# This can be installed by:
+# /path/to/python3 -m pip install Levenshtein
+#
+# GitHub eArmada8/ed8pkg2gltf
+
+try:
+    import os, csv
+    from Levenshtein import distance as levenshtein_distance
+except ModuleNotFoundError as e:
+    print("Python module missing! {}".format(e.msg))
+    input("Press Enter to abort.")
+    raise   
+
+csv_file = 'ed8_chr_switches.csv'
+
+class Shader_db:
+    def __init__(self, shader_db_csv, report_file = 'report.txt'):
+        self.shader_db_csv = shader_db_csv
+        self.report_file = report_file
+        self.shader_array = self.read_shader_csv()
+        self.shader_switches = self.shader_array[0][4:]
+        self.shader_sig = {x[0]:''.join(x[4:]) for x in self.shader_array[1:]}
+        self.diffs = {}
+        self.restriction = ''
+        self.restricted_list = [x[0] for x in self.shader_array[1:]]
+        self.report = ''
+
+    def read_shader_csv (self):
+        with open(self.shader_db_csv) as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter=',')
+            return([row for row in csv_reader])
+
+    def set_restricted_list (self, restriction):
+        if restriction in self.shader_array[0][1:4]:
+            self.restriction = restriction
+            restriction_column = self.shader_array[0].index(restriction)
+            self.restricted_list = [x[0] for x in self.shader_array[1:] if x[restriction_column] != 'None']
+        else:
+            self.restricted_list = [x[0] for x in self.shader_array[1:]]
+        return
+
+    def diff(self, shader1, shader2): #Returns the value of shader2
+        string1 = self.shader_sig[shader1]
+        string2 = self.shader_sig[shader2]
+        differences = [i for i in range(len(string1)) if string1[i] != string2[i]]
+        return({self.shader_switches[i]:string2[i] for i in differences})
+
+    def sort_shaders_by_similarity(self, shader):
+        shader_diff = {k:levenshtein_distance(self.shader_sig[k], self.shader_sig[shader]) \
+            for k in self.shader_sig if k != shader}
+        diff_val = sorted(list(set(shader_diff.values())))
+        self.diffs = {diff_val[i]:{x:self.diff(shader,x) for x in shader_diff if shader_diff[x] == diff_val[i]}\
+            for i in range(len(diff_val))}
+        self.report = 'Original Shader: {0}\n'.format(shader)
+        if self.restriction != '':
+            self.report += '\nRestriction: {} is not None\n'.format(self.restriction)
+        for i in self.diffs:
+            self.report += '\nShaders with {} differences:\n\n'.format(i)
+            for j in self.diffs[i]:
+                if j in self.restricted_list:
+                    self.report += '{}:\n'.format(j)
+                    self.report += '\n'.join(['{0}: {1}'.format(k,v) for (k,v)\
+                        in self.diffs[i][j].items()]) + '\n\n'
+        return(self.report)
+
+    def generate_report(self, shader):
+        with open(self.report_file,'w') as f:
+            f.write(self.sort_shaders_by_similarity(shader))
+        return
+
+if __name__ == "__main__":
+    # Set current directory
+    os.chdir(os.path.abspath(os.path.dirname(__file__)))
+
+    if os.path.exists(csv_file):
+        shader_db = Shader_db(csv_file)
+        shader = input("Please enter name of shader to analyze: ")
+        while not shader in shader_db.shader_sig.keys():
+            partial_matches = [x for x in shader_db.shader_sig.keys() if shader.upper() in x]
+            if len(partial_matches) > 0: # We will only take the first
+                confirm = input("{0} not found, did you mean {1}? (y/N) ".format(shader, partial_matches[0]))
+                if confirm.lower() == 'y':
+                    shader = partial_matches[0]
+                else:
+                    shader = input("Please enter name of shader to analyze: ")
+            else:
+                shader = input("Invalid entry. Please enter name of shader to analyze: ")
+        restriction = input("Please enter game restriction [{}, or blank for None]: ".format(', '.join(shader_db.shader_array[0][1:4])))
+        while not restriction in ['']+shader_db.shader_array[0][1:4]:
+            restriction = input("Invalid entry. Please enter game restriction [{}, or blank for None]: ".format(', '.join(shader_db.shader_array[0][1:4])))
+        shader_db.set_restricted_list(restriction)
+        shader_db.generate_report(shader)
+    else:
+        input("{} is missing!  Press Enter to abort.".format(csv_file))
