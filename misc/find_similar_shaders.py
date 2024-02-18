@@ -1,24 +1,23 @@
 # ED8 shader finder.  Give the filename of a shader e.g. 'ed8_chr.fx#43908C853D966A373118677862503A56'
-# and it will search the database (by default 'ed8_chr_switches.csv', set below) to generate a report
+# and it will search the database (by default 'all_shaders.csv', set below) to generate a report
 # of the other switches, ranked by similarity.  Requires Python 3.10 or newer.
 #
-# Requires ed8_chr_switches.csv (or ed8_map_switches.csv if line 13 is changed), obtain from
-# https://github.com/eArmada8/ed8pkg2gltf/raw/main/doc/game_transfer_img/ed8_chr_switches.csv
-# https://github.com/eArmada8/ed8pkg2gltf/raw/main/doc/game_transfer_img/ed8_map_switches.csv
+# Requires all_shaders.csv, obtain from
+# https://github.com/eArmada8/ed8pkg2gltf/raw/main/doc/game_transfer_img/all_shaders.csv
 #
 # GitHub eArmada8/ed8pkg2gltf
 
 import os, csv
 
-csv_file = 'ed8_chr_switches.csv'
+csv_file = 'all_shaders.csv'
 
 class Shader_db:
     def __init__(self, shader_db_csv, report_file = 'report.txt'):
         self.shader_db_csv = shader_db_csv
         self.report_file = report_file
         self.shader_array = self.read_shader_csv()
-        self.shader_switches = self.shader_array[0][4:]
-        self.shader_sig = {x[0]:''.join(x[4:]) for x in self.shader_array[1:]}
+        self.shader_switches = self.shader_array[0][6:]
+        self.shader_sig = {x[0]:''.join(x[6:]) for x in self.shader_array[1:]}
         self.diffs = {}
         self.restriction = ''
         self.restriction_column = None
@@ -31,7 +30,7 @@ class Shader_db:
             return([row for row in csv_reader])
 
     def set_restricted_list (self, restriction):
-        if restriction in self.shader_array[0][1:4]:
+        if restriction in self.shader_array[0][1:6]:
             self.restriction = restriction
             self.restriction_column = self.shader_array[0].index(restriction)
             self.restricted_list = [x[0] for x in self.shader_array[1:] if x[self.restriction_column] != 'None']
@@ -93,9 +92,9 @@ if __name__ == "__main__":
                     shader = input("Please enter name of shader to analyze: ")
             else:
                 shader = input("Invalid entry. Please enter name of shader to analyze: ")
-        restriction = input("Please enter game restriction [{}, or blank for None]: ".format(', '.join(shader_db.shader_array[0][1:4])))
-        while not restriction in ['']+shader_db.shader_array[0][1:4]:
-            restriction = input("Invalid entry. Please enter game restriction [{}, or blank for None]: ".format(', '.join(shader_db.shader_array[0][1:4])))
+        restriction = input("Please enter game restriction [{}, or blank for None]: ".format(', '.join(shader_db.shader_array[0][1:6])))
+        while not restriction in ['']+shader_db.shader_array[0][1:6]:
+            restriction = input("Invalid entry. Please enter game restriction [{}, or blank for None]: ".format(', '.join(shader_db.shader_array[0][1:6])))
         shader_db.set_restricted_list(restriction)
         shader_db.report_file = 'report_{0}_{1}.txt'.format(shader_db.restriction,shader)
         shader_db.generate_report(shader)
