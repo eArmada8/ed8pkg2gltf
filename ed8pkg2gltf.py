@@ -3194,12 +3194,16 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
                 material['normalTexture'] = normalTextureInfo
             v['mu_gltfMaterialIndex'] = len(materials)
             materials.append(material)
-            if 'dae' in cluster_mesh_info.filename and v['mu_materialname'][-8:] != '-Skinned':
+            if 'dae' in cluster_mesh_info.filename and not (v['mu_materialname'][-8:] == '-Skinned' or v['mu_materialname'][-12:] == '-VertexColor'):
                 material = {}
                 material['shader'] = v['m_parameterBuffer']['m_effectVariant']['m_id']
-                skinned_material = [x for x in cluster_mesh_info.data_instances_by_class['PMaterial'] if x['mu_materialname'] == v['mu_materialname']+'-Skinned']
-                if len(skinned_material) > 0:
-                    material['skinned_shader'] = skinned_material[0]['m_parameterBuffer']['m_effectVariant']['m_id']
+                related_materials = {}
+                related_materials.update({'skinned_shader':x for x in cluster_mesh_info.data_instances_by_class['PMaterial'] if (x['mu_materialname'] == v['mu_materialname']+'-Skinned')})
+                related_materials.update({'vertex_color_shader':x for x in cluster_mesh_info.data_instances_by_class['PMaterial'] if (x['mu_materialname'] == v['mu_materialname']+'-VertexColor')})
+                related_materials.update({'skinned_vertex_color_shader':x for x in cluster_mesh_info.data_instances_by_class['PMaterial'] if (x['mu_materialname'] == v['mu_materialname']+'-Skinned-VertexColor')})
+                if len(related_materials) > 0:
+                    for related_material in related_materials:
+                        material[related_material] = related_materials[related_material]['m_parameterBuffer']['m_effectVariant']['m_id']
                 shaderParameters = {key:list(value) if isinstance(value, memoryview) else value for (key,value) in v['m_parameterBuffer']['mu_shaderParameters'].items()}
                 material['shaderTextures'] = {k:v for (k,v) in shaderParameters.items() if isinstance(v,str)}
                 material['non2Dtextures'] = {}
@@ -3319,7 +3323,7 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
                     ff.write(curmesh['m_meshSegments']['m_els'][tt]['mu_indBuffer'])
                 write_vb(vb, mesh_folder_name + "/{0}_{1:02d}.vb".format(t['mu_name'], tt), fmt)
                 with open(mesh_folder_name + "/{0}_{1:02d}.material".format(t['mu_name'], tt), "wb") as ff:
-                    ff.write(json.dumps({'material': mat['mu_materialname'].split('-Skinned')[0]}, indent=4).encode("utf-8"))
+                    ff.write(json.dumps({'material': mat['mu_materialname'].split('-VertexColor')[0].split('-Skinned')[0]}, indent=4).encode("utf-8"))
                 with open(mesh_folder_name + "/{0}_{1:02d}.uvmap".format(t['mu_name'], tt), "wb") as ff:
                     ff.write(json.dumps([{'m_name': x['m_name'], 'm_index': x['m_index'], 'm_inputSet': x['m_inputSet']}\
                         for x in t['m_segmentContext']['m_els'][tt]['m_streamBindings']['m_u']], indent=4).encode("utf-8"))

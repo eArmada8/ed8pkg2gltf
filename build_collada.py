@@ -517,7 +517,7 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has
             print("Warning!  Skeleton detection likely failed, as it is not up_point or root (case-sensitive)!  Defaulting to top node.")
             skeleton_name = base_node.attrib['name']
         skeleton_id = [i for i in range(len(skeleton)) if skeleton[i]['name'] == skeleton_name][0]
-        joint_list = get_joint_list(skeleton_id, [x for y in [x['vgmap'].keys() for x in submeshes] for x in y]+[skeleton_name], skeleton)
+        joint_list = get_joint_list(skeleton_id, [x for y in [x['vgmap'].keys() for x in submeshes if 'vgmap' in x] for x in y]+[skeleton_name], skeleton)
         bone_dict = get_bone_dict(skeleton)
     for submesh in submeshes:
         if "_".join(submesh["name"].split("_")[:-1]) in mesh_instances:
@@ -1117,7 +1117,7 @@ def write_asset_xml (metadata_list):
         images.sort()
         shaders = []
         for material in metadata_list[i]['materials']:
-            for shader_type in ['shader','skinned_shader']:
+            for shader_type in ['shader','skinned_shader','vertex_color_shader','skinned_vertex_color_shader']:
                 if shader_type in metadata_list[i]['materials'][material] and metadata_list[i]['materials'][material][shader_type] not in already_appended:
                     shader_name = metadata_list[i]['materials'][material][shader_type]
                     shaders.append('\t\t<cluster path="data/D3D11/{0}.phyre" type="p_fx" />\r\n'.format(shader_name))

@@ -10,6 +10,10 @@ import os, json, shutil, glob, sys
 def make_true_shader_dict(metadata):
     true_shader_dict = {}
     true_shader_dict.update({k:b'\x00'+v['shader'].encode() for (k,v) in metadata['materials'].items()})
+    true_shader_dict.update({k+'-Skinned-VertexColor':b'\x00'+v['skinned_vertex_color_shader'].encode() for (k,v) in metadata['materials'].items() if 'skinned_vertex_color_shader' in v.keys()})
+    # I am not sure why, but the compiler seems to generate a -Skinned shader even when only a -Skinned-VertexColor shader exists in the original, perhaps it is reused?  This will be overwritten if a real one exists.
+    true_shader_dict.update({k+'-Skinned':b'\x00'+v['skinned_vertex_color_shader'].encode() for (k,v) in metadata['materials'].items() if 'skinned_vertex_color_shader' in v.keys()})
+    true_shader_dict.update({k+'-VertexColor':b'\x00'+v['vertex_color_shader'].encode() for (k,v) in metadata['materials'].items() if 'vertex_color_shader' in v.keys()})
     true_shader_dict.update({k+'-Skinned':b'\x00'+v['skinned_shader'].encode() for (k,v) in metadata['materials'].items() if 'skinned_shader' in v.keys()})
     return(true_shader_dict)
 
