@@ -6,6 +6,32 @@
 import struct, glob, io, os, sys, shutil
 from xml.dom.minidom import parse
 
+#Thank you to Admiral Curtiss and uyjulian for assistance in writing this algorithm!
+def compress_nislzss(data_block):
+    cmpdata = bytearray()
+    i = 0
+    while i < len(data_block):
+        look_back = data_block[i-0xFE if i>0xFE else 0:i]
+        if data_block[i] in look_back:
+            start_matches = [i - (len(look_back) - j) for j in range(len(look_back)) if look_back[j] == data_block[i]]
+            match_lens = []
+            for m in start_matches:
+                k = 0
+                while i+k < len(data_block) and data_block[m+k] == data_block[i+k] and m+k+1 < i:
+                    k += 1
+                match_lens.append(k)
+        if data_block[i] in look_back and max(match_lens) > 3:
+            best_match = match_lens.index(max(match_lens))
+            cmpdata.extend([0, i-start_matches[best_match]+1, match_lens[best_match]])
+            i += match_lens[best_match]
+        else:
+            if data_block[i] == 0:
+                cmpdata.extend([0,0]) # Escape sequence
+            else:
+                cmpdata.append(data_block[i])
+            i += 1
+    return(struct.pack("<3I", len(data_block), len(cmpdata) + 12, 0) + cmpdata)
+
 # Adds file onto the end of the stream, and appends name/size to contents.  Offsets are not calculated.
 def insert_file_into_stream (f, content_struct, binary_file_data, file_details):
     f.write(binary_file_data)
@@ -36,7 +62,8 @@ def write_pkg_file (newfilename, file_stream, content_struct, magic = b'\x00\x00
         f.write(file_stream.read())
     return
 
-def processFolder(pkg_folder, include_all = False, lz4_compress = False, overwrite = False):
+#lz4 takes precedent over lzss
+def processFolder(pkg_folder, include_all = False, lz4_compress = False, lzss_compress = False, overwrite = False):
     if lz4_compress == True:
         try:
             import lz4.block
@@ -67,6 +94,9 @@ def processFolder(pkg_folder, include_all = False, lz4_compress = False, overwri
                     if lz4_present == True:
                         binary_file_data = lz4.block.compress(binary_file_data, mode = 'high_compression', store_size=False)
                         flags = 4
+                elif lzss_compress == True:
+                    binary_file_data = compress_nislzss(binary_file_data)
+                    flags = 1
                 file_details = {"file_entry_name": os.path.basename(files[i]), "file_entry_uncompressed_size": unc_size,\
                     "file_entry_compressed_size": len(binary_file_data), "file_entry_offset": 0,\
                     "file_entry_flags": flags}
@@ -94,8 +124,9 @@ if __name__ == "__main__":
         parser.add_argument('pkg_folder', help="Name of folder to pack.")
         parser.add_argument('-a', '--include_all', help="Include all files (ignore asset_D3D11.xml)", action="store_true")
         parser.add_argument('-l', '--lz4_compress', help="Apply LZ4 compression", action="store_true")
+        parser.add_argument('-lz', '--lzss_compress', help="Apply LZSS compression (LZ4 overrides this)", action="store_true")
         parser.add_argument('-o', '--overwrite', help="Overwrite existing files", action="store_true")
         args = parser.parse_args()
         if os.path.exists(args.pkg_folder):
             processFolder(args.pkg_folder, include_all = args.include_all, lz4_compress = args.lz4_compress,\
-                overwrite = args.overwrite)
+                lzss_compress = args.lzss_compress, overwrite = args.overwrite)
