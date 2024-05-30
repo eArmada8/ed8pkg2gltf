@@ -1,24 +1,25 @@
-# Trails of Cold Steel III / IV / into Reverie Model Toolset
+# Trails of Cold Steel III / IV / into Reverie and Tokyo Xanadu eX+ Model Toolset
 
-This a tool set for making mods of character models in Trails of Cold Steel III, IV and into Reverie (Hajimari) for PC (DirectX 11).  It is built on top of uyjulian's ed8pkg2glb tool, which is [here](https://github.com/uyjulian/ed8pkg2glb).  I have not removed the functionality of producing glb (gltf) files, although those files are not used in the model compilation process.
+This a tool set for making mods of character models in Trails of Cold Steel III, IV and into Reverie (Hajimari) as well as Tokyo Xanadu eX+ for PC (DirectX 11).  It is built on top of uyjulian's ed8pkg2glb tool, which is [here](https://github.com/uyjulian/ed8pkg2glb).  I have not removed the functionality of producing glb (gltf) files, although those files are not used in the model compilation process.
 
 ## Tutorials:
 
 Please see the [wiki](https://github.com/eArmada8/ed8pkg2gltf/wiki), and the detailed documentation below.
 
 ## Credits:
-The original phyre asset decompiler is written by Julian Uy (github.com/uyjulian), and I have only made modifications.  I wrote the remaining tools, and am very thankful to Arc, My Name, uyjulian, TwnKey and the Kiseki modding discord for their brilliant work and for sharing that work so freely.  I am especially thankful to Arc for sharing expertise in the compilation process and for spending many evenings helping me debug!  I am also very thankful to My Name for sharing models and knowledge as well.
+The original phyre asset decompiler is written by Julian Uy (github.com/uyjulian), and I have only made modifications.  I wrote the remaining tools, and am very thankful to Arc, My Name, uyjulian, TwnKey, AdmiralCurtiss, Kyuuhachi and the Kiseki modding discord for their brilliant work and for sharing that work so freely.  I am especially thankful to Arc for sharing expertise in the compilation process and for spending many evenings helping me debug!  I am also very thankful to My Name for sharing models and knowledge as well.
 
 ## Requirements:
 1. Python 3.9 or newer is required for use of this script.  It is free from the Microsoft Store, for Windows users.  For Linux users, please consult your distro.
 2. Numpy, pyquaternion and pygltflib are required by build_collada as well as the glTF mesh exporter.  The zstandard module for python is needed for decompiling zstandard-compressed pkgs.  The lz4 module is used for compressing compiled .pkgs.  Install all of these by running the included install_python_modules.bat or by typing "python3 -m pip install zstandard numpy pyquaternion pygltflib" in the command line / shell.
 3. The output can be imported into Blender using DarkStarSword's amazing plugin: https://github.com/DarkStarSword/3d-fixes/blob/master/blender_3dmigoto.py (tested on commit [c6daca9](https://raw.githubusercontent.com/DarkStarSword/3d-fixes/c6daca90d64b0fb53f2ebf70806e539b8007d328/blender_3dmigoto.py))
 4. Compilation is dependent on the phyre Engine tools from [here](https://github.com/Trails-Research-Group/Doc/releases/download/v0.0/WorkFolder.zip), as described on the [tutorial from the Trails-Research-Group](https://github.com/Trails-Research-Group/Doc/wiki/How-to:-Import-custom-models-to-Cold-Steel-IV).  (You do not need the tutorial for basic mods, just the tools.)  The tools require [the Windows SDK](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/).
+5. While optional, `write_pkg.py` will take advantage of `sentools.exe` if present to speed up compression.  `sentools.exe` can be obtained from [SenPatcher by AdmiralCurtiss](https://github.com/AdmiralCurtiss/SenPatcher/releases)
 
 ## Usage:
 
 ### Step 1: Decompilation
-Obtain a model or animation pkg file.  In CS3/CS4, the files are stored in assets.pka and must be extracted.  Use [extract_pka.py](https://github.com/eArmada8/unpackpka) in the same folder as assets.pka.
+Obtain a model or animation pkg file.  In CS3/CS4, the files are stored in assets.pka and must be extracted.  Use [extract_pka.py](https://github.com/eArmada8/unpackpka) in the same folder as assets.pka.  Tokyo Xanadu eX+ assets are stored in .bra archives, txe_file_extract.py can be used and is available as part of [ed8_inject](https://github.com/eArmada8/ed8_inject/releases).
 
 Place ed8pkg2gltf.py and lib_fmtibvb.py into a folder with your character model (.pkg) file.  Double-click ed8pkg2gltf.py.  It will create a folder with the same name as the pkg, and dump in there the model in glb (gltf) form, meshes for modding in a folder, textures in their own folder, and a metadata.json file.  (Note: Vertex group mapping behavior can be configured, see below.)
 
@@ -48,7 +49,7 @@ For this step, put build_collada.py, lib_fmtibvb.py, replace_shader_references.p
 
 -Double click build_collada.py.  It will make a .dae file, in the original compile folder as defined in asset_D3D11.xml (by default it is chr/chr/{model name}/).  It will also make a shaders/ed8_chr.fx file for compiling (and/or ed8.fx, etc), and a RunMe.bat.  (For animations, it will make a .dae file for every animation listed in animation_metadata.json.  Animations will not have shader files.)
 
--Double click RunMe.bat.  It will run the asset import tool, then it will use the dummy shader creator to identify all the shaders for replacement, then it will use replace_shader_references.py to fix all the shader pointers, and finally it will clean up, move everything to the build directory, and run write_pkg.py to generate your .pkg file.
+-Double click RunMe.bat.  It will run the asset import tool, then it will use the dummy shader creator to identify all the shaders for replacement, then it will use replace_shader_references.py to fix all the shader pointers, and finally it will clean up, move everything to the build directory, and run write_pkg.py to generate your .pkg file.  By default, the original compression will be applied (LZSS/LZ4/None) although zstandard will be replaced with LZ4.  If write_pkg.py finds sentools.exe in the folder, it will utilize that to perform the compression for enhanced speed.
 
 ## Notes
 
