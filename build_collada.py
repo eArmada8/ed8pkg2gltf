@@ -1138,10 +1138,10 @@ def write_processing_batch_file (models, animation_metadata = {}):
     # Model pkg_name overrides animation pkg_name
     if len(metadata_list) > 0:
         pkg_name = metadata_list[0]['pkg_name']
-        compression_level = metadata_list[0]['compression']
+        compression_level = metadata_list[0]['compression'] if 'compression' in metadata_list[0] else 4
     elif 'pkg_name' in animation_metadata:
         pkg_name = animation_metadata['pkg_name']
-        compression_level = animation_metadata['compression']
+        compression_level = animation_metadata['compression'] if 'compression' in metadata_list[0] else 4
     else:
         return False
     compflag = ''
@@ -1183,6 +1183,13 @@ move {1}.dae.phyre {3}'''.format(xml_info[metadata_list[i]['name']]['dae_path'].
     return True
 
 def write_texture_processing_batch_file (asset_xml, xml_num = 0):
+    if os.path.exists('compression.json'):
+        compression_level = read_struct_from_json('compression.json')['compression']
+    compflag = ''
+    if compression_level == 1:
+        compflag = '-lz '
+    elif compression_level >= 4:
+        compflag = '-l '
     daes, textures = asset_info_from_xml(asset_xml)
     image_copy_text = ''
     images = ["{0}/{1}".format(textures[x]['dae_path'],x).replace('/','\\') for x in textures]
@@ -1193,7 +1200,7 @@ def write_texture_processing_batch_file (asset_xml, xml_num = 0):
     batch_file = '@ECHO OFF\r\nset "SCE_PHYRE=%cd%"\r\n'
     for i in range(len(images)):
         batch_file += 'CSIVAssetImportTool.exe -fi="{0}" -platform="D3D11" -write=all\r\n'.format(images[i])
-    batch_file += image_copy_text + 'python write_pkg.py -o {0}\r\n'.format(os.path.dirname(asset_xml))
+    batch_file += image_copy_text + 'python write_pkg.py {0}-o {1}\r\n'.format(compflag, os.path.dirname(asset_xml))
     with open('RunMe{}.bat'.format(xml_num if xml_num else ''), 'wb') as f:
         f.write(batch_file.encode('utf-8'))
     return
