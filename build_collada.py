@@ -1141,7 +1141,7 @@ def write_processing_batch_file (models, animation_metadata = {}):
         compression_level = metadata_list[0]['compression'] if 'compression' in metadata_list[0] else 4
     elif 'pkg_name' in animation_metadata:
         pkg_name = animation_metadata['pkg_name']
-        compression_level = animation_metadata['compression'] if 'compression' in metadata_list[0] else 4
+        compression_level = animation_metadata['compression'] if 'compression' in animation_metadata else 4
     else:
         return False
     compflag = ''
