@@ -1133,14 +1133,22 @@ def write_asset_xml (metadata_list):
     return
 
 def write_processing_batch_file (models, animation_metadata = {}):
+    compression_level = 0
     metadata_list = [read_struct_from_json(x) for x in models] # A little inefficient but safer
     # Model pkg_name overrides animation pkg_name
     if len(metadata_list) > 0:
         pkg_name = metadata_list[0]['pkg_name']
+        compression_level = metadata_list[0]['compression']
     elif 'pkg_name' in animation_metadata:
         pkg_name = animation_metadata['pkg_name']
+        compression_level = animation_metadata['compression']
     else:
         return False
+    compflag = ''
+    if compression_level == 1:
+        compflag = '-lz '
+    elif compression_level >= 4:
+        compflag = '-l '
     xml_info, textures = asset_info_from_xml(pkg_name+'/asset_D3D11.xml')
     image_copy_text = ''
     image_folders = sorted(list(set([os.path.dirname(x).replace('/','\\') for y in [x['shaderTextures']\
@@ -1167,7 +1175,7 @@ move {1}.dae.phyre {3}'''.format(xml_info[metadata_list[i]['name']]['dae_path'].
             batch_file += 'CSIVAssetImportTool.exe -fi="{0}" -platform="D3D11" -write=all\r\n'.format(dae_path \
                 + '/' + animation + ".dae")
             batch_file += 'copy D3D11\{0}\{1}.dae.phyre {2}\r\n'.format(dae_path.replace('/','\\'), animation, pkg_name)
-    batch_file += image_copy_text + 'python write_pkg.py -l -o {0}\r\n'.format(pkg_name)
+    batch_file += image_copy_text + 'python write_pkg.py {0}-o {1}\r\n'.format(compflag, pkg_name)
     if len(metadata_list) > 0:
         batch_file += 'del *.fx\r\ndel *.cgfx\r\n'
     with open('RunMe.bat', 'wb') as f:
@@ -1185,7 +1193,7 @@ def write_texture_processing_batch_file (asset_xml, xml_num = 0):
     batch_file = '@ECHO OFF\r\nset "SCE_PHYRE=%cd%"\r\n'
     for i in range(len(images)):
         batch_file += 'CSIVAssetImportTool.exe -fi="{0}" -platform="D3D11" -write=all\r\n'.format(images[i])
-    batch_file += image_copy_text + 'python write_pkg.py -l -o {0}\r\n'.format(os.path.dirname(asset_xml))
+    batch_file += image_copy_text + 'python write_pkg.py -o {0}\r\n'.format(os.path.dirname(asset_xml))
     with open('RunMe{}.bat'.format(xml_num if xml_num else ''), 'wb') as f:
         f.write(batch_file.encode('utf-8'))
     return

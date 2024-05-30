@@ -2055,6 +2055,7 @@ class TED8PkgMedia(IStorageMedia):
             (file_entry_name, file_entry_uncompressed_size, file_entry_compressed_size, file_entry_offset, file_entry_flags) = struct.unpack('<64sIIII', f.read(64 + 4 + 4 + 4 + 4))
             package_file_entries[file_entry_name.rstrip(b'\x00').decode('ASCII')] = [file_entry_offset, file_entry_compressed_size, file_entry_uncompressed_size, file_entry_flags]
         self.file_entries = package_file_entries
+        self.compression_flag = 0
 
     def normalize_path_name(self, name):
         return os.path.normpath(name)
@@ -2067,17 +2068,22 @@ class TED8PkgMedia(IStorageMedia):
         self.f.seek(file_entry[0])
         output_data = None
         if file_entry[3] & 2:
+            self.compression_flag = 2
             self.f.seek(4, io.SEEK_CUR)
         if file_entry[3] & 4:
+            self.compression_flag = 4
             output_data = uncompress_lz4(self.f, file_entry[2], file_entry[1])
         elif file_entry[3] & 1:
+            self.compression_flag = 1
             output_data = uncompress_nislzss(self.f, file_entry[2], file_entry[1])
         elif file_entry[3] & 8:
+            self.compression_flag = 8
             if 'zstandard' in sys.modules:
                 output_data = uncompress_zstd(self.f, file_entry[2], file_entry[1])
             else:
                 raise Exception('File %s could not be extracted because zstandard module is not installed' % name)
         else:
+            self.compression_flag = 0
             output_data = self.f.read(file_entry[2])
         if 'b' in flags:
             return io.BytesIO(output_data, **kwargs)
@@ -2798,6 +2804,7 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
         physics_json_name = pkg_name + "/physics_data_{0}.json".format(str(item_num).zfill(2))
         mesh_folder_name = pkg_name + "/meshes_{0}".format(str(item_num).zfill(2))
     metadata_json = {'name': cluster_mesh_info.filename.split('.', 1)[0], 'pkg_name': pkg_name}
+    metadata_json['compression'] = cluster_mesh_info.storage_media.storage2.compression_flag
     if not os.path.exists(mesh_folder_name) and 'PMeshInstance' in cluster_mesh_info.data_instances_by_class:
         os.mkdir(mesh_folder_name)
     asset = {}

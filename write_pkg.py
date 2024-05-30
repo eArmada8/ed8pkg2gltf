@@ -3,7 +3,7 @@
 #
 # GitHub eArmada8/ed8pkg2gltf
 
-import struct, glob, io, os, sys, shutil
+import struct, glob, io, os, sys, shutil, subprocess
 from xml.dom.minidom import parse
 
 #Thank you to Admiral Curtiss and uyjulian for assistance in writing this algorithm!
@@ -128,5 +128,12 @@ if __name__ == "__main__":
         parser.add_argument('-o', '--overwrite', help="Overwrite existing files", action="store_true")
         args = parser.parse_args()
         if os.path.exists(args.pkg_folder):
-            processFolder(args.pkg_folder, include_all = args.include_all, lz4_compress = args.lz4_compress,\
-                lzss_compress = args.lzss_compress, overwrite = args.overwrite)
+            if os.path.exists("sentools.exe") and args.lz4_compress == True:
+                subprocess.check_call(["sentools.exe", "PKG.Pack", "--compression=lz4",\
+                    "--output={}.pkg".format(args.pkg_folder), "{}".format(args.pkg_folder)])
+            elif os.path.exists("sentools.exe") and args.lzss_compress == True:
+                subprocess.check_call(["sentools.exe", "PKG.Pack", "--compression=type1",\
+                    "--output={}.pkg".format(args.pkg_folder), "{}".format(args.pkg_folder)])
+            else:
+                processFolder(args.pkg_folder, include_all = args.include_all, lz4_compress = args.lz4_compress,\
+                    lzss_compress = args.lzss_compress, overwrite = args.overwrite)
