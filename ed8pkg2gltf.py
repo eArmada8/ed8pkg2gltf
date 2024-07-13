@@ -807,7 +807,7 @@ def get_dds_header(fmt, width, height, mipmap_levels, is_cube_map):
             (ddspf_dwRBitMask, ddspf_dwGBitMask, ddspf_dwBBitMask, ddspf_dwABitMask) = (255, 255, 255, 0)
             dwFlags |= 8
         elif fmt == 'ARGB8' or fmt == 'ARGB8_SRGB':
-            (ddspf_dwRBitMask, ddspf_dwGBitMask, ddspf_dwBBitMask, ddspf_dwABitMask) = (65280, 16711680, 4278190080, 255)
+            (ddspf_dwRBitMask, ddspf_dwGBitMask, ddspf_dwBBitMask, ddspf_dwABitMask) = (16711680, 65280, 255, 4278190080)
             dwFlags |= 8
         elif fmt == 'RGBA8':
             (ddspf_dwRBitMask, ddspf_dwGBitMask, ddspf_dwBBitMask, ddspf_dwABitMask) = (255, 65280, 16711680, 4278190080)
