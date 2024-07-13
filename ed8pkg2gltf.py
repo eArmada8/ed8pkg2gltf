@@ -3780,7 +3780,14 @@ def process_pkg(pkg_name, partialmaps = partial_vgmaps_default, allbuffers = Fal
 
             if len(animation_metadata) > 0:
                 with open(pkg_name[:-4] + '/' + 'animation_metadata.json', 'wb') as f:
-                    f.write(json.dumps({'pkg_name': pkg_name[:-4], 'animations': animation_metadata}, indent=4).encode("utf-8"))
+                    f.write(json.dumps({'pkg_name': pkg_name[:-4],\
+                    'compression': storage_media.storage2.compression_flag,\
+                    'animations': animation_metadata}, indent=4).encode("utf-8"))
+
+            if len(glob.glob(pkg_name[:-4] + '/*metadata.json')) == 0:
+                with open(pkg_name[:-4] + '/' + 'compression.json', 'wb') as f:
+                    f.write(json.dumps({'compression': storage_media.storage2.compression_flag},\
+                        indent=4).encode("utf-8"))
 
             return
         else:
