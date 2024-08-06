@@ -1330,6 +1330,12 @@ def build_collada (metadata_name, animation_metadata = {}):
                 metadata['locators'].extend(animation_metadata['animations'][metadata['name']]['locators'])
                 metadata['locators'] = list(set(metadata['locators']))
         print("Adding skeleton...")
+        unique_bones = set()
+        duplicate_bones = [x['name'] for x in metadata['heirarchy'] if x['name'] in unique_bones or unique_bones.add(x['name'])]
+        duplicate_bones_ex = [x for x in duplicate_bones if not x in ['VisualSceneNode']] # This is filtered out later
+        if len(duplicate_bones_ex) > 0:
+            print("Warning! Duplicate bones found: {}.\nThe model will compile but may appear distorted.".format(duplicate_bones_ex))
+            input("Press Enter to continue.")
         skeleton = add_bone_info(metadata['heirarchy'], skeletal_bones = skeletal_bones)
         collada = add_skeleton(collada, metadata, skeletal_bones = skeletal_bones, ani_times = ani_times)
         print("Adding geometry...")
