@@ -574,8 +574,11 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has
                     param = ET.SubElement(accessor, 'param')
                     param.set('name', param_names[i])
                     param.set('type', 'float')
-        if 'BLENDWEIGHTS' in semantics_list and 'BLENDINDICES' in semantics_list:
-            blendweights = [x['Buffer'] for x in submesh["vb"] if x['SemanticName'] == 'BLENDWEIGHTS'][0]
+        if ('BLENDWEIGHT' in semantics_list or 'BLENDWEIGHTS' in semantics_list) and 'BLENDINDICES' in semantics_list:
+            if 'BLENDWEIGHT' in semantics_list:
+                blendweights = [x['Buffer'] for x in submesh["vb"] if x['SemanticName'] == 'BLENDWEIGHT'][0]
+            else:
+                blendweights = [x['Buffer'] for x in submesh["vb"] if x['SemanticName'] == 'BLENDWEIGHTS'][0]
             blendindices = [x['Buffer'] for x in submesh["vb"] if x['SemanticName'] == 'BLENDINDICES'][0]
             blendjoints = dict(joint_list)
             new_weights = []
@@ -733,7 +736,7 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has
         double_sided.text = '1'
         # Create geometry node
         parent_node = [x for x in collada.iter() if 'sid' in x.attrib and x.attrib['sid'] == meshname]
-        if 'BLENDWEIGHTS' in semantics_list and 'BLENDINDICES' in semantics_list:
+        if ('BLENDWEIGHT' in semantics_list or 'BLENDWEIGHTS' in semantics_list) and 'BLENDINDICES' in semantics_list:
             if len(parent_node) > 0:
                 mesh_node = parent_node[0]
             else:

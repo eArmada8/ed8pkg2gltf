@@ -3243,7 +3243,7 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
     elementtype = {5120: 'SINT', 5121: 'UINT', 5122: 'SINT', 5123: 'UINT', 5125: 'UINT', 5126: 'FLOAT'}
     numelements = {'SCALAR':1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4}
     semantics = {'Vertex': 'POSITION', 'Normal': 'NORMAL', 'ST': 'TEXCOORD', 'Tangent': 'TANGENT',\
-        'Binormal': 'BINORMAL', 'Color': 'COLOR', 'SkinWeights': 'BLENDWEIGHTS', 'SkinIndices': 'BLENDINDICES'}
+        'Binormal': 'BINORMAL', 'Color': 'COLOR', 'SkinWeights': 'BLENDWEIGHT', 'SkinIndices': 'BLENDINDICES'}
     if 'PMeshInstance' in cluster_mesh_info.data_instances_by_class:
         mesh_instances = cluster_mesh_info.data_instances_by_class['PMeshInstance']
     for t in mesh_instances:
