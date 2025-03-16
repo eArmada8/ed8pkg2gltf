@@ -178,7 +178,10 @@ def add_materials (collada, metadata, relative_path = '../../..', forward_render
                 print("Compile will likely fail, and the .pkg may crash the game.")
                 input("Press Enter to continue.")
             texture_name = materials[material]['shaderTextures'][parameter].replace('.DDS','.dds').split('/')[-1].split('.dds')[0]
-            sampler_name = parameter + 'Sampler'
+            if parameter + 'S' in materials[material]['shaderSamplerDefs']:
+                sampler_name = parameter + 'S' # CS2
+            else:
+                sampler_name = parameter + 'Sampler' # CS3 onward
             if 'non2Dtextures' in materials[material].keys() and parameter in materials[material]['non2Dtextures'].keys() \
                 and materials[material]['non2Dtextures'][parameter] == 'PTextureCubeMap':
                 sampler_type = 'samplerCUBE'
@@ -1024,7 +1027,7 @@ def add_animations (collada, gltf, ani_struct):
         channel.set('target', "{0}/transform".format(bone))
     return(collada)
 
-def write_shader (materials_list):
+def write_shader (materials_list, mode = 'CS3'):
     if not os.path.exists("shaders"):
         os.mkdir("shaders")
     filelists = []
@@ -1051,14 +1054,27 @@ def write_shader (materials_list):
                             value = "float{0}({1})".format(len(materials_list[i][material]['shaderParameters'][parameter]),\
                                 ", ".join(["{0:.3f}".format(x) for x in materials_list[i][material]['shaderParameters'][parameter]]))
                         shaderfx += '{0} {1} : {1} = {2};\r\n'.format(valuetype, parameter, value)
-                    for parameter in materials_list[i][material]['shaderSamplerDefs']:
+                    captured_samplers = []
+                    if mode == 'CS2':
+                        for parameter in materials_list[i][material]['shaderTextures']:
+                            sampler_name = parameter + 'S' # CS2
+                            if 'non2Dtextures' in materials_list[i][material].keys() and parameter in materials_list[i][material]['non2Dtextures'].keys() \
+                                and materials_list[i][material]['non2Dtextures'][parameter] == 'PTextureCubeMap':
+                                shaderfx += 'TextureCube {0} : {0};\r\n'.format(parameter)
+                            else:
+                                shaderfx += 'Texture2D {0} : {0};\r\n'.format(parameter)
+                            if sampler_name in materials_list[i][material]['shaderSamplerDefs']:
+                                shaderfx += 'sampler {0}{{\r\n\tFilter = {1};\r\n}};\r\n'.format(sampler_name,{0: 21, 64: 148}[materials_list[i][material]['shaderSamplerDefs'][sampler_name]['m_flags'] & 0x40])
+                                captured_samplers.append(sampler_name)
+                    for parameter in [x for x in materials_list[i][material]['shaderSamplerDefs'] if not x in captured_samplers]:
                         shaderfx += 'sampler {0}{{\r\n\tFilter = {1};\r\n}};\r\n'.format(parameter,{0: 21, 64: 148}[materials_list[i][material]['shaderSamplerDefs'][parameter]['m_flags'] & 0x40])
-                    for parameter in materials_list[i][material]['shaderTextures']:
-                        if 'non2Dtextures' in materials_list[i][material].keys() and parameter in materials_list[i][material]['non2Dtextures'].keys() \
-                            and materials_list[i][material]['non2Dtextures'][parameter] == 'PTextureCubeMap':
-                            shaderfx += 'TextureCube {0} : {0};\r\n'.format(parameter)
-                        else:
-                            shaderfx += 'Texture2D {0} : {0};\r\n'.format(parameter)
+                    if not mode == 'CS2':
+                        for parameter in materials_list[i][material]['shaderTextures']:
+                            if 'non2Dtextures' in materials_list[i][material].keys() and parameter in materials_list[i][material]['non2Dtextures'].keys() \
+                                and materials_list[i][material]['non2Dtextures'][parameter] == 'PTextureCubeMap':
+                                shaderfx += 'TextureCube {0} : {0};\r\n'.format(parameter)
+                            else:
+                                shaderfx += 'Texture2D {0} : {0};\r\n'.format(parameter)
                     # Switchless shaders do not need the #endif
                     if len(materials_list[i][material]['shader'].split('#')) > 1:
                         shaderfx += '#endif //! {0}\r\n'.format(shader_switch)
@@ -1135,7 +1151,7 @@ def write_asset_xml (metadata_list):
         f.write(asset_xml.encode('utf-8'))
     return
 
-def write_processing_batch_file (models, animation_metadata = {}):
+def write_processing_batch_file (models, animation_metadata = {}, processor = 'CSIVAssetImportTool.exe'):
     compression_level = 0
     metadata_list = [read_struct_from_json(x) for x in models] # A little inefficient but safer
     # Model pkg_name overrides animation pkg_name
@@ -1161,13 +1177,13 @@ def write_processing_batch_file (models, animation_metadata = {}):
             image_copy_text += 'copy D3D11\{0}\*.* {1}\r\n'.format(folder, metadata_list[0]['pkg_name'])
     batch_file = '@ECHO OFF\r\nset "SCE_PHYRE=%cd%"\r\n'
     for i in range(len(metadata_list)):
-        batch_file += '''CSIVAssetImportTool.exe -fi="{0}\{1}.dae" -platform="D3D11" -write=all
-PhyreDummyShaderCreator.exe D3D11\{0}\{1}.dae.phyre
-copy D3D11\{0}\{1}.dae.phyre .
-python replace_shader_references.py {2}
-del {1}.dae.phyre.bak
-copy /Y .\{1}.dae.phyre D3D11\{0}
-move {1}.dae.phyre {3}'''.format(xml_info[metadata_list[i]['name']]['dae_path'].replace('/','\\'),\
+        batch_file += '''{0} -fi="{1}\{2}.dae" -platform="D3D11" -write=all
+PhyreDummyShaderCreator.exe D3D11\{1}\{2}.dae.phyre
+copy D3D11\{1}\{2}.dae.phyre .
+python replace_shader_references.py {3}
+del {2}.dae.phyre.bak
+copy /Y .\{2}.dae.phyre D3D11\{1}
+move {2}.dae.phyre {4}'''.format(processor, xml_info[metadata_list[i]['name']]['dae_path'].replace('/','\\'),\
         metadata_list[i]['name'], models[i], pkg_name) + '\r\n'
     if 'animations' in animation_metadata:
         for animation in animation_metadata['animations']:
@@ -1175,8 +1191,8 @@ move {1}.dae.phyre {3}'''.format(xml_info[metadata_list[i]['name']]['dae_path'].
                 dae_path = xml_info[animation]['dae_path']
             else:
                 dae_path = 'chr/chr/{0}'.format(animation.split('_')[0])
-            batch_file += 'CSIVAssetImportTool.exe -fi="{0}" -platform="D3D11" -write=all\r\n'.format(dae_path \
-                + '/' + animation + ".dae")
+            batch_file += '{0} -fi="{1}" -platform="D3D11" -write=all\r\n'.format(processor,\
+                dae_path + '/' + animation + ".dae")
             batch_file += 'copy D3D11\{0}\{1}.dae.phyre {2}\r\n'.format(dae_path.replace('/','\\'), animation, pkg_name)
     batch_file += image_copy_text + 'python write_pkg.py {0}-o {1}\r\n'.format(compflag, pkg_name)
     if len(metadata_list) > 0:
@@ -1185,7 +1201,7 @@ move {1}.dae.phyre {3}'''.format(xml_info[metadata_list[i]['name']]['dae_path'].
         f.write(batch_file.encode('utf-8'))
     return True
 
-def write_texture_processing_batch_file (asset_xml, xml_num = 0):
+def write_texture_processing_batch_file (asset_xml, xml_num = 0, processor = 'CSIVAssetImportTool.exe'):
     if os.path.exists('compression.json'):
         compression_level = read_struct_from_json('compression.json')['compression']
     compflag = ''
@@ -1202,7 +1218,7 @@ def write_texture_processing_batch_file (asset_xml, xml_num = 0):
             image_copy_text += 'copy D3D11\{0}\*.* {1}\r\n'.format(folder, os.path.dirname(asset_xml))
     batch_file = '@ECHO OFF\r\nset "SCE_PHYRE=%cd%"\r\n'
     for i in range(len(images)):
-        batch_file += 'CSIVAssetImportTool.exe -fi="{0}" -platform="D3D11" -write=all\r\n'.format(images[i])
+        batch_file += '{0} -fi="{1}" -platform="D3D11" -write=all\r\n'.format(images[i], processor)
     batch_file += image_copy_text + 'python write_pkg.py {0}-o {1}\r\n'.format(compflag, os.path.dirname(asset_xml))
     with open('RunMe{}.bat'.format(xml_num if xml_num else ''), 'wb') as f:
         f.write(batch_file.encode('utf-8'))
