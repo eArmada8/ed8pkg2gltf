@@ -48,6 +48,9 @@ def replace_shader_references(filedata, true_shader_dict, fake_shader_dict):
                 new_phyre += b'\x00' + shader_filename.encode()
             end_key = filedata.find(b'\x00', shader_loc + 1)
             shader_loc = filedata.find(b'\x00shader', shader_loc + 1)
+            if shader_loc > len(new_phyre): # Shaders without hashes sometimes have an extra byte padding (CS2 Maps)
+                while shader_loc > len(new_phyre):
+                    new_phyre += b'\x00'
         new_phyre += filedata[end_key:]
         return(new_phyre)
     else:
