@@ -3678,8 +3678,11 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
                 current_rigid_body = v['m_rigidBodies']
                 rigid_bodies = {}
                 if 'PPhysicsRigidBody' in cluster_mesh_info.data_instances_by_class:
+                    rigid_body_count = 1
                     while current_rigid_body is not None:
                         vv = current_rigid_body
+                        if not 'mu_name' in vv: # CS1 Maps do not have names for the rigid bodies
+                            vv['mu_name'] = 'rigidBody{}'.format(rigid_body_count)
                         rigid_bodies[vv['mu_name']] = {'targetNode': vv['m_targetNode']['m_name'],\
                             'material': {item:vv['m_material'][item] for item in vv['m_material'] if isinstance(vv['m_material'][item],float)},\
                             'shapes': {}}
@@ -3703,6 +3706,7 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
                                 elif 'm_elements' in vvv[item]:
                                     rigid_bodies[vv['mu_name']]['shapes'][shape['mu_name']][item] = list(vvv[item]['m_elements'])
                         current_rigid_body = vv['m_next']
+                        rigid_body_count += 1
                 # Physics models have an m_next and m_world, but we do not support that (yet)
                 physics_data["PPhysicsModel_{0}".format(v['mu_memberLoc'])] = { 'rigid_bodies': rigid_bodies }
         with open(physics_json_name, 'wb') as f:
