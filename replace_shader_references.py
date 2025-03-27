@@ -22,10 +22,9 @@ def make_fake_shader_dict():
         fake_shader_dict = {}
         with open('materials_list.txt', 'r') as f:
             for line in f:
-                entry = line.split('#')
-                if len(entry) > 2:
-                    data = [x.split(" ")[0] for x in entry[1:3]]
-                    fake_shader_dict[data[1].strip()] = data[0]
+                entry = line.split(' crc: ')[0].split(' : ')
+                if len(entry) > 1:
+                    fake_shader_dict[entry[1].strip()] = entry[0].split('dae#')[-1]
         return(fake_shader_dict)
     else:
         return False
@@ -36,11 +35,14 @@ def replace_shader_references(filedata, true_shader_dict, fake_shader_dict):
         new_phyre = filedata[0:shader_loc]
         while shader_loc > 0:
             shader_filename = filedata[shader_loc+1:filedata.find(b'\x00', shader_loc+1)].decode()
-            if '#' in shader_filename:
-                shader_key = shader_filename.split('#')[-1]
-                try:
-                    new_phyre += true_shader_dict[fake_shader_dict[shader_key]]
-                except KeyError:
+            if shader_filename in fake_shader_dict:
+                if fake_shader_dict[shader_filename] in true_shader_dict:
+                    new_phyre += true_shader_dict[fake_shader_dict[shader_filename]]
+                    if len(true_shader_dict[fake_shader_dict[shader_filename]]) < len(shader_filename) + 1:
+                        padding_len = len(shader_filename) + 1 - len(true_shader_dict[fake_shader_dict[shader_filename]])
+                        for _ in range(padding_len):
+                            new_phyre += b'\x00'
+                else:
                     print("KeyError: Attempted to replace shader \"{0}\" but it does not exist in the metadata!".format(fake_shader_dict[shader_key]))
                     input("Press Enter to abort.")
                     raise
