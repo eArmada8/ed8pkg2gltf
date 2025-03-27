@@ -85,7 +85,7 @@ def add_materials (collada, metadata, relative_path = '../../..', forward_render
     # Materials and effects can be done in parallel
     library_materials = ET.SubElement(collada, 'library_materials')
     library_effects = ET.SubElement(collada, 'library_effects')
-    all_shader_switches = ['SHADER_'+v['shader'].split('#')[-1] for (k,v) in materials.items()]
+    all_shader_switches = ['SHADER_'+(v['shader'].split('#')[-1] if len(v['shader'].split('#')) > 1 else '') for (k,v) in materials.items()]
     for material in materials:
         #Materials
         material_element = ET.SubElement(library_materials, 'material')
@@ -272,23 +272,24 @@ def add_materials (collada, metadata, relative_path = '../../..', forward_render
         extra = ET.SubElement(material_element, 'extra')
         technique = ET.SubElement(extra, 'technique')
         technique.set("profile", "PHYRE")
+        material_switches = ET.SubElement(technique, 'material_switches')
+        shader_name_split = materials[material]['shader'].split('#')
+        current_shader_switch = 'SHADER_' + (shader_name_split[-1] if len(shader_name_split) > 1 else '')
+        shader = ET.SubElement(material_switches, current_shader_switch)
+        material_switch_list = ET.SubElement(technique, 'material_switch_list')
         if 'shaderSwitches' in materials[material]:
-            material_switches = ET.SubElement(technique, 'material_switches')
-            current_shader_switch = 'SHADER_' + materials[material]['shader'].split('#')[-1]
-            shader = ET.SubElement(material_switches, current_shader_switch)
-            material_switch_list = ET.SubElement(technique, 'material_switch_list')
             # Switches are taken from the shader files themselves
             for material_switch in materials[material]['shaderSwitches']:
                 material_switch_entry = ET.SubElement(material_switch_list, 'material_switch')
                 material_switch_entry.set("name", material_switch)
                 material_switch_entry.set("material_switch_value", materials[material]['shaderSwitches'][material_switch])
-            for i in range(len(all_shader_switches)):
-                material_switch_entry = ET.SubElement(material_switch_list, 'material_switch')
-                material_switch_entry.set("name", all_shader_switches[i])
-                if all_shader_switches[i] == current_shader_switch:
-                    material_switch_entry.set("material_switch_value", "1")
-                else:
-                    material_switch_entry.set("material_switch_value", "0")
+        for i in range(len(all_shader_switches)):
+            material_switch_entry = ET.SubElement(material_switch_list, 'material_switch')
+            material_switch_entry.set("name", all_shader_switches[i])
+            if all_shader_switches[i] == current_shader_switch:
+                material_switch_entry.set("material_switch_value", "1")
+            else:
+                material_switch_entry.set("material_switch_value", "0")
         forwardrendertechnique = ET.SubElement(profile_HLSL, 'technique')
         if forward_render == True:
             forwardrendertechnique.set("sid", "ForwardRender")
@@ -1039,11 +1040,13 @@ def write_shader (materials_list, mode = 'CS3'):
         added_shaders = []
         for i in range(len(materials_list)):
             for material in materials_list[i]:
-                shader_switch = 'SHADER_{0}'.format(materials_list[i][material]['shader'].split('#')[-1])
+                shader_name_split = materials_list[i][material]['shader'].split('#')
+                shader_switch = 'SHADER_{0}'.format(shader_name_split[-1] if len(shader_name_split) > 1 else '')
                 if shader_switch not in added_shaders and materials_list[i][material]['shader'].split('#')[0] == filename:
                     added_shaders.append(shader_switch)
                     # Switchless shaders do not need the #ifdef
-                    if len(materials_list[i][material]['shader'].split('#')) > 1:
+                    #if len(materials_list[i][material]['shader'].split('#')) > 1:
+                    if 1:
                         shaderfx += '#ifdef {0}\r\n'.format(shader_switch)
                     for parameter in materials_list[i][material]['shaderParameters']:
                         if len(materials_list[i][material]['shaderParameters'][parameter]) == 1:
@@ -1076,7 +1079,8 @@ def write_shader (materials_list, mode = 'CS3'):
                             else:
                                 shaderfx += 'Texture2D {0} : {0};\r\n'.format(parameter)
                     # Switchless shaders do not need the #endif
-                    if len(materials_list[i][material]['shader'].split('#')) > 1:
+                    #if len(materials_list[i][material]['shader'].split('#')) > 1:
+                    if 1:
                         shaderfx += '#endif //! {0}\r\n'.format(shader_switch)
                     shaderfx += '\r\n\r\n'
         shaderfx += '#ifdef SUBDIV\r\n#undef SKINNING_ENABLED\r\n#undef INSTANCING_ENABLED\r\n#endif // SUBDIV\r\n\r\n'
