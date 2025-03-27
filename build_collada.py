@@ -1292,7 +1292,8 @@ def add_animation_to_collada (collada, animation, animation_metadata):
     if not filename == False:
         gltf = GLTF2().load(filename)
         ani_struct, ani_times = extract_animation(gltf)
-        collada = add_animations(collada, gltf, ani_struct)
+        if len(ani_struct) > 0:
+            collada = add_animations(collada, gltf, ani_struct)
         return (collada, ani_struct, ani_times)
     else:
         return collada, {}, [0,0]
