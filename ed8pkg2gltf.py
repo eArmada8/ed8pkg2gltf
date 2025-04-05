@@ -3722,7 +3722,7 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
                 jsondata = json.dumps(cluster_mesh_info.gltf_data, indent=4).encode("utf-8")
                 f.write(jsondata)
             with cluster_mesh_info.storage_media.open(pkg_name + "/" + cluster_mesh_info.filename.split('.', 1)[0] + '.bin', 'wb') as f:
-                f.write(embedded_giant_buffer_joined) 
+                f.write(embedded_giant_buffer_joined)
         else:
             with cluster_mesh_info.storage_media.open(pkg_name + "/" + cluster_mesh_info.filename.split('.', 1)[0] + '.glb', 'wb') as f:
                 jsondata = json.dumps(cluster_mesh_info.gltf_data).encode('utf-8')
@@ -3739,18 +3739,20 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
         animation_metadata[metadata_json['name']] = {'starttime_offset': min([accessors[x]['min'] for x in animation_time_accessors]),\
             'locators': metadata_json['locators']}
 
-def process_pkg(pkg_name, partialmaps = partial_vgmaps_default, allbuffers = False, gltf_nonbinary = False, overwrite = False):
+def process_pkg(pkg_name, partialmaps = partial_vgmaps_default, allbuffers = False, gltf_nonbinary = False, overwrite = False, dest_dir = None):
     global animation_metadata
     animation_metadata = {}
     storage_media = None
     print("Processing {0}...".format(pkg_name))
+    if not dest_dir:
+        dest_dir = pkg_name[:-4]
     if file_is_ed8_pkg(pkg_name):
-        if os.path.exists(pkg_name[:-4]) and (os.path.isdir(pkg_name[:-4])) and (overwrite == False):
-            if str(input(pkg_name[:-4] + " folder exists! Overwrite? (y/N) ")).lower()[0:1] == 'y':
+        if os.path.exists(dest_dir) and (os.path.isdir(dest_dir)) and (overwrite == False):
+            if str(input(dest_dir + " folder exists! Overwrite? (y/N) ")).lower()[0:1] == 'y':
                 overwrite = True
-        if (overwrite == True) or not os.path.exists(pkg_name[:-4]):
-            if not os.path.exists(pkg_name[:-4]):
-                os.mkdir(pkg_name[:-4])
+        if (overwrite == True) or not os.path.exists(dest_dir):
+            if not os.path.exists(dest_dir):
+                os.mkdir(dest_dir)
             allowed_write_extensions = ['.glb', '.json', '.dds', '.xml', '.phyre']
             storage_media = TSpecialOverlayMedia(os.path.realpath(pkg_name), allowed_write_extensions)
             items = []
@@ -3767,7 +3769,7 @@ def process_pkg(pkg_name, partialmaps = partial_vgmaps_default, allbuffers = Fal
                 storage_media.get_list_at('.', list_callback2)
             for i in range(len(items)):
                 print("Parsing {0}...".format(items[i]))
-                parse_cluster(items[i], None, storage_media, pkg_name[:-4], partialmaps = partialmaps, \
+                parse_cluster(items[i], None, storage_media, dest_dir, partialmaps = partialmaps, \
                     allbuffers = allbuffers, gltf_nonbinary = gltf_nonbinary, item_num=i)
 
             build_items = []
@@ -3775,21 +3777,21 @@ def process_pkg(pkg_name, partialmaps = partial_vgmaps_default, allbuffers = Fal
                 if item[-4:] == '.xml' or item[-42:-38] == '.fx#' or item[-9:-6] == '.fx':
                     build_items.append(item)
             storage_media.get_list_at('.', list_build_items_callback)
-            if not os.path.exists(pkg_name[:-4] + '/' + pkg_name[:-4]):
-                os.makedirs(pkg_name[:-4] + '/' + pkg_name[:-4])
+            if not os.path.exists(dest_dir + '/' + pkg_name[:-4]):
+                os.makedirs(dest_dir + '/' + pkg_name[:-4])
             for i in range(len(build_items)):
                 with storage_media.open(build_items[i], 'rb') as f:
-                    with open(pkg_name[:-4] + '/' + pkg_name[:-4] + '/' + build_items[i], 'wb') as ff:
+                    with open(dest_dir + '/' + pkg_name[:-4] + '/' + build_items[i], 'wb') as ff:
                         ff.write(f.read())
 
             if len(animation_metadata) > 0:
-                with open(pkg_name[:-4] + '/' + 'animation_metadata.json', 'wb') as f:
-                    f.write(json.dumps({'pkg_name': pkg_name[:-4],\
+                with open(dest_dir + '/' + 'animation_metadata.json', 'wb') as f:
+                    f.write(json.dumps({'pkg_name': dest_dir,\
                     'compression': storage_media.storage2.compression_flag,\
                     'animations': animation_metadata}, indent=4).encode("utf-8"))
 
-            if len(glob.glob(pkg_name[:-4] + '/*metadata.json')) == 0:
-                with open(pkg_name[:-4] + '/' + 'compression.json', 'wb') as f:
+            if len(glob.glob(dest_dir + '/*metadata.json')) == 0:
+                with open(dest_dir + '/' + 'compression.json', 'wb') as f:
                     f.write(json.dumps({'compression': storage_media.storage2.compression_flag},\
                         indent=4).encode("utf-8"))
 
@@ -3816,6 +3818,7 @@ if __name__ == '__main__':
         parser.add_argument('-a', '--allbuffers', help="Dump all buffers (default is no more than 8 texcoord/tangent/binormal)", action="store_true")
         parser.add_argument('-t', '--gltf_nonbinary', help="Output glTF files in .gltf format, instead of .glb.", action="store_true")
         parser.add_argument('-o', '--overwrite', help="Overwrite existing files", action="store_true")
+        parser.add_argument('-d', '--dest_dir', type=str, help="Path where to extract the pkg.")
         parser.add_argument('pkg_filename', help="Name of pkg file to export from (required).")
         args = parser.parse_args()
         if partial_vgmaps_default == False:
@@ -3824,7 +3827,7 @@ if __name__ == '__main__':
             partialmaps = args.completemaps
         if os.path.exists(args.pkg_filename) and args.pkg_filename[-4:].lower() == '.pkg':
             process_pkg(args.pkg_filename, partialmaps = partialmaps, allbuffers = args.allbuffers, \
-                gltf_nonbinary = args.gltf_nonbinary, overwrite = args.overwrite)
+                gltf_nonbinary = args.gltf_nonbinary, overwrite = args.overwrite, dest_dir = args.dest_dir)
     else:
         pkg_files = glob.glob('*.pkg')
         for i in range(len(pkg_files)):
