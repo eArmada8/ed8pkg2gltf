@@ -2015,14 +2015,16 @@ class TFileMedia(IStorageMedia):
         return os.path.normpath(name)
 
     def check_existent_storage(self, name):
-        return os.path.isfile(self.basepath + '/' + name)
+        return os.path.isfile(self.basepath + os.sep + name)
 
     def open(self, name, flags='rb', **kwargs):
         if 'w' in flags:
-            return open(self.basepath + '/' + name, flags, **kwargs)
+            if not os.path.isabs(name):
+                name = os.path.join(self.basepath, name)
+            return open(name, flags, **kwargs)
         else:
             input_data = None
-            with open(self.basepath + '/' + name, 'rb') as f:
+            with open(self.basepath + os.sep + name, 'rb') as f:
                 input_data = f.read()
             if 'b' in flags:
                 return io.BytesIO(input_data, **kwargs)
@@ -2251,12 +2253,12 @@ def create_texture(g, dict_data, cluster_mesh_info, cluster_header, is_cube_map,
         if dict_data['m_format'] in size_map:
             image_data = Unswizzle(image_data, image_width, image_height, dict_data['m_format'], True, cluster_header.platform_id, pitch)
     if 'PAssetReference' in cluster_mesh_info.data_instances_by_class:
-        path_name = pkg_name + '/' + os.path.dirname(cluster_mesh_info.data_instances_by_class['PAssetReference'][0]['m_id'])
+        path_name = pkg_name + os.sep + os.path.dirname(cluster_mesh_info.data_instances_by_class['PAssetReference'][0]['m_id']).replace('/', os.sep)
     else:
-        path_name = pkg_name + '/textures'
+        path_name = pkg_name + os.sep + 'textures'
     if not os.path.exists(path_name):
         os.makedirs(path_name)
-    dds_output_path = path_name + '/' + cluster_mesh_info.filename.split('.', 1)[0] + '.dds'
+    dds_output_path = path_name + os.sep + cluster_mesh_info.filename.split('.', 1)[0] + '.dds'
     with cluster_mesh_info.storage_media.open(dds_output_path, 'wb') as (f):
         f.write(get_dds_header(dict_data['m_format'], image_width, image_height, None, False))
         f.write(image_data)
@@ -2796,13 +2798,13 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
     import json
     # Use the presence of metadata files to determine which .dae asset we are processing
     if item_num == 0:
-        metadata_json_name = pkg_name + "/metadata.json" # First file will be metadata.json
-        physics_json_name = pkg_name + "/physics_data.json" # First file will be metadata.json
-        mesh_folder_name = pkg_name + "/meshes"
+        metadata_json_name = pkg_name + os.sep + "metadata.json" # First file will be metadata.json
+        physics_json_name = pkg_name + os.sep + "physics_data.json" # First file will be metadata.json
+        mesh_folder_name = pkg_name + os.sep + "meshes"
     else:
-        metadata_json_name = pkg_name + "/metadata_{0}.json".format(str(item_num).zfill(2))
-        physics_json_name = pkg_name + "/physics_data_{0}.json".format(str(item_num).zfill(2))
-        mesh_folder_name = pkg_name + "/meshes_{0}".format(str(item_num).zfill(2))
+        metadata_json_name = pkg_name + os.sep + "metadata_{0}.json".format(str(item_num).zfill(2))
+        physics_json_name = pkg_name + os.sep + "physics_data_{0}.json".format(str(item_num).zfill(2))
+        mesh_folder_name = pkg_name + os.sep + "meshes_{0}".format(str(item_num).zfill(2))
     metadata_json = {'name': cluster_mesh_info.filename.split('.', 1)[0], 'pkg_name': pkg_name}
     metadata_json['compression'] = cluster_mesh_info.storage_media.storage2.compression_flag
     if not os.path.exists(mesh_folder_name) and 'PMeshInstance' in cluster_mesh_info.data_instances_by_class:
@@ -3325,13 +3327,13 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
             if len(m['m_vertexData']) > 0:
                 fmt['elements'] = elements
                 fmt['stride'] = str(AlignedByteOffset)
-                write_fmt(fmt, mesh_folder_name + "/{0}_{1:02d}.fmt".format(t['mu_name'], tt))
-                with open(mesh_folder_name + "/{0}_{1:02d}.ib".format(t['mu_name'], tt), 'wb') as ff:
+                write_fmt(fmt, mesh_folder_name + os.sep + "{0}_{1:02d}.fmt".format(t['mu_name'], tt))
+                with open(mesh_folder_name + os.sep + "{0}_{1:02d}.ib".format(t['mu_name'], tt), 'wb') as ff:
                     ff.write(curmesh['m_meshSegments']['m_els'][tt]['mu_indBuffer'])
-                write_vb(vb, mesh_folder_name + "/{0}_{1:02d}.vb".format(t['mu_name'], tt), fmt)
-                with open(mesh_folder_name + "/{0}_{1:02d}.material".format(t['mu_name'], tt), "wb") as ff:
+                write_vb(vb, mesh_folder_name + os.sep + "{0}_{1:02d}.vb".format(t['mu_name'], tt), fmt)
+                with open(mesh_folder_name + os.sep + "{0}_{1:02d}.material".format(t['mu_name'], tt), "wb") as ff:
                     ff.write(json.dumps({'material': mat['mu_materialname'].split('-VertexColor')[0].split('-Skinned')[0]}, indent=4).encode("utf-8"))
-                with open(mesh_folder_name + "/{0}_{1:02d}.uvmap".format(t['mu_name'], tt), "wb") as ff:
+                with open(mesh_folder_name + os.sep + "{0}_{1:02d}.uvmap".format(t['mu_name'], tt), "wb") as ff:
                     ff.write(json.dumps([{'m_name': x['m_name'], 'm_index': x['m_index'], 'm_inputSet': x['m_inputSet']}\
                         for x in t['m_segmentContext']['m_els'][tt]['m_streamBindings']['m_u']], indent=4).encode("utf-8"))
             uvDataStreamSet = {}
@@ -3523,10 +3525,10 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
                                 "joints": submesh_joint_list}
                             nodes[mesh_nodes[i]]['skin'] = len(skins)
                             if partialmaps == True:
-                                with open(mesh_folder_name + "/{0}_{1:02d}.vgmap".format(v['mu_name'], i), 'wb') as f:
+                                with open(mesh_folder_name + os.sep + "{0}_{1:02d}.vgmap".format(v['mu_name'], i), 'wb') as f:
                                     f.write(json.dumps(vgmap_list, indent=4).encode("utf-8"))
                             else:
-                                with open(mesh_folder_name + "/{0}_{1:02d}.vgmap".format(v['mu_name'], i), 'wb') as f:
+                                with open(mesh_folder_name + os.sep + "{0}_{1:02d}.vgmap".format(v['mu_name'], i), 'wb') as f:
                                     f.write(json.dumps(remapped_vgmap_list, indent=4).encode("utf-8"))
                             skins.append(skin)
             if 'mu_gltfAccessorForInverseBindMatrixIndex' in mesh and 'mu_gltfNodeIndex' in v:
@@ -3717,14 +3719,14 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
         embedded_giant_buffer_joined = b''.join(embedded_giant_buffer)
         buffer0['byteLength'] = len(embedded_giant_buffer_joined)
         if gltf_nonbinary == True:
-            with cluster_mesh_info.storage_media.open(pkg_name + "/" + cluster_mesh_info.filename.split('.', 1)[0] + '.gltf', 'wb') as f:
+            with cluster_mesh_info.storage_media.open(pkg_name + os.sep + cluster_mesh_info.filename.split('.', 1)[0] + '.gltf', 'wb') as f:
                 buffer0["uri"] = cluster_mesh_info.filename.split('.', 1)[0] + '.bin'
                 jsondata = json.dumps(cluster_mesh_info.gltf_data, indent=4).encode("utf-8")
                 f.write(jsondata)
-            with cluster_mesh_info.storage_media.open(pkg_name + "/" + cluster_mesh_info.filename.split('.', 1)[0] + '.bin', 'wb') as f:
-                f.write(embedded_giant_buffer_joined) 
+            with cluster_mesh_info.storage_media.open(pkg_name + os.sep + cluster_mesh_info.filename.split('.', 1)[0] + '.bin', 'wb') as f:
+                f.write(embedded_giant_buffer_joined)
         else:
-            with cluster_mesh_info.storage_media.open(pkg_name + "/" + cluster_mesh_info.filename.split('.', 1)[0] + '.glb', 'wb') as f:
+            with cluster_mesh_info.storage_media.open(pkg_name + os.sep + cluster_mesh_info.filename.split('.', 1)[0] + '.glb', 'wb') as f:
                 jsondata = json.dumps(cluster_mesh_info.gltf_data).encode('utf-8')
                 jsondata += b' ' * (4 - len(jsondata) % 4)
                 f.write(struct.pack('<III', 1179937895, 2, 12 + 8 + len(jsondata) + 8 + len(embedded_giant_buffer_joined)))
@@ -3739,18 +3741,22 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
         animation_metadata[metadata_json['name']] = {'starttime_offset': min([accessors[x]['min'] for x in animation_time_accessors]),\
             'locators': metadata_json['locators']}
 
-def process_pkg(pkg_name, partialmaps = partial_vgmaps_default, allbuffers = False, gltf_nonbinary = False, overwrite = False):
+def process_pkg(pkg_name, partialmaps = partial_vgmaps_default, allbuffers = False, gltf_nonbinary = False, overwrite = False, dest_dir = None):
     global animation_metadata
     animation_metadata = {}
     storage_media = None
     print("Processing {0}...".format(pkg_name))
+    if dest_dir is None:
+        dest_dir = pkg_name[:-4]
+    else:
+        dest_dir = dest_dir + os.sep + os.path.basename(pkg_name[:-4])
     if file_is_ed8_pkg(pkg_name):
-        if os.path.exists(pkg_name[:-4]) and (os.path.isdir(pkg_name[:-4])) and (overwrite == False):
-            if str(input(pkg_name[:-4] + " folder exists! Overwrite? (y/N) ")).lower()[0:1] == 'y':
+        if os.path.exists(dest_dir) and (os.path.isdir(dest_dir)) and (overwrite == False):
+            if str(input(dest_dir + " folder exists! Overwrite? (y/N) ")).lower()[0:1] == 'y':
                 overwrite = True
-        if (overwrite == True) or not os.path.exists(pkg_name[:-4]):
-            if not os.path.exists(pkg_name[:-4]):
-                os.mkdir(pkg_name[:-4])
+        if (overwrite == True) or not os.path.exists(dest_dir):
+            if not os.path.exists(dest_dir):
+                os.makedirs(dest_dir, exist_ok=True)
             allowed_write_extensions = ['.glb', '.json', '.dds', '.xml', '.phyre']
             storage_media = TSpecialOverlayMedia(os.path.realpath(pkg_name), allowed_write_extensions)
             items = []
@@ -3767,7 +3773,7 @@ def process_pkg(pkg_name, partialmaps = partial_vgmaps_default, allbuffers = Fal
                 storage_media.get_list_at('.', list_callback2)
             for i in range(len(items)):
                 print("Parsing {0}...".format(items[i]))
-                parse_cluster(items[i], None, storage_media, pkg_name[:-4], partialmaps = partialmaps, \
+                parse_cluster(items[i], None, storage_media, dest_dir, partialmaps = partialmaps, \
                     allbuffers = allbuffers, gltf_nonbinary = gltf_nonbinary, item_num=i)
 
             build_items = []
@@ -3775,21 +3781,21 @@ def process_pkg(pkg_name, partialmaps = partial_vgmaps_default, allbuffers = Fal
                 if item[-4:] == '.xml' or item[-42:-38] == '.fx#' or item[-9:-6] == '.fx':
                     build_items.append(item)
             storage_media.get_list_at('.', list_build_items_callback)
-            if not os.path.exists(pkg_name[:-4] + '/' + pkg_name[:-4]):
-                os.makedirs(pkg_name[:-4] + '/' + pkg_name[:-4])
+            if not os.path.exists(dest_dir + os.sep + os.path.basename(pkg_name)[:-4]):
+                os.makedirs(dest_dir + os.sep + os.path.basename(pkg_name)[:-4])
             for i in range(len(build_items)):
                 with storage_media.open(build_items[i], 'rb') as f:
-                    with open(pkg_name[:-4] + '/' + pkg_name[:-4] + '/' + build_items[i], 'wb') as ff:
+                    with open(dest_dir + os.sep + os.path.basename(pkg_name)[:-4] + os.sep + build_items[i], 'wb') as ff:
                         ff.write(f.read())
 
             if len(animation_metadata) > 0:
-                with open(pkg_name[:-4] + '/' + 'animation_metadata.json', 'wb') as f:
-                    f.write(json.dumps({'pkg_name': pkg_name[:-4],\
+                with open(dest_dir + os.sep + 'animation_metadata.json', 'wb') as f:
+                    f.write(json.dumps({'pkg_name': dest_dir,\
                     'compression': storage_media.storage2.compression_flag,\
                     'animations': animation_metadata}, indent=4).encode("utf-8"))
 
-            if len(glob.glob(pkg_name[:-4] + '/*metadata.json')) == 0:
-                with open(pkg_name[:-4] + '/' + 'compression.json', 'wb') as f:
+            if len(glob.glob(dest_dir + os.sep +'*metadata.json')) == 0:
+                with open(dest_dir + os.sep + 'compression.json', 'wb') as f:
                     f.write(json.dumps({'compression': storage_media.storage2.compression_flag},\
                         indent=4).encode("utf-8"))
 
@@ -3816,6 +3822,7 @@ if __name__ == '__main__':
         parser.add_argument('-a', '--allbuffers', help="Dump all buffers (default is no more than 8 texcoord/tangent/binormal)", action="store_true")
         parser.add_argument('-t', '--gltf_nonbinary', help="Output glTF files in .gltf format, instead of .glb.", action="store_true")
         parser.add_argument('-o', '--overwrite', help="Overwrite existing files", action="store_true")
+        parser.add_argument('-d', '--dest_dir', type=str, help="Path where to extract the pkg.")
         parser.add_argument('pkg_filename', help="Name of pkg file to export from (required).")
         args = parser.parse_args()
         if partial_vgmaps_default == False:
@@ -3824,7 +3831,7 @@ if __name__ == '__main__':
             partialmaps = args.completemaps
         if os.path.exists(args.pkg_filename) and args.pkg_filename[-4:].lower() == '.pkg':
             process_pkg(args.pkg_filename, partialmaps = partialmaps, allbuffers = args.allbuffers, \
-                gltf_nonbinary = args.gltf_nonbinary, overwrite = args.overwrite)
+                gltf_nonbinary = args.gltf_nonbinary, overwrite = args.overwrite, dest_dir = args.dest_dir)
     else:
         pkg_files = glob.glob('*.pkg')
         for i in range(len(pkg_files)):
