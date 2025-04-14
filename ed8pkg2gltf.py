@@ -2019,8 +2019,6 @@ class TFileMedia(IStorageMedia):
 
     def open(self, name, flags='rb', **kwargs):
         if 'w' in flags:
-            if not os.path.isabs(name):
-                name = os.path.join(self.basepath, name)
             return open(name, flags, **kwargs)
         else:
             input_data = None
@@ -3758,7 +3756,7 @@ def process_pkg(pkg_name, partialmaps = partial_vgmaps_default, allbuffers = Fal
             if not os.path.exists(dest_dir):
                 os.makedirs(dest_dir, exist_ok=True)
             allowed_write_extensions = ['.glb', '.json', '.dds', '.xml', '.phyre']
-            storage_media = TSpecialOverlayMedia(os.path.realpath(pkg_name), allowed_write_extensions)
+            storage_media = TSpecialOverlayMedia(os.path.realpath(pkg_name),  allowed_write_extensions)
             items = []
 
             def list_callback(item):
@@ -3805,12 +3803,6 @@ def process_pkg(pkg_name, partialmaps = partial_vgmaps_default, allbuffers = Fal
     raise Exception('Passed in file is not compatible file')
 
 if __name__ == '__main__':
-    # Set current directory
-    if getattr(sys, 'frozen', False):
-        os.chdir(os.path.dirname(sys.executable))
-    else:
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
-
     # If argument given, attempt to export from file in argument
     if len(sys.argv) > 1:
         import argparse
@@ -3825,6 +3817,9 @@ if __name__ == '__main__':
         parser.add_argument('-d', '--dest_dir', type=str, help="Path where to extract the pkg.")
         parser.add_argument('pkg_filename', help="Name of pkg file to export from (required).")
         args = parser.parse_args()
+        if args.dest_dir:
+            if os.path.exists(args.dest_dir) and not os.path.isdir(args.dest_dir):
+                raise Exception("--dest_dir (-d) '{}' not a directory.".format(args.dest_dir))
         if partial_vgmaps_default == False:
             partialmaps = args.partialmaps
         else:
@@ -3832,7 +3827,14 @@ if __name__ == '__main__':
         if os.path.exists(args.pkg_filename) and args.pkg_filename[-4:].lower() == '.pkg':
             process_pkg(args.pkg_filename, partialmaps = partialmaps, allbuffers = args.allbuffers, \
                 gltf_nonbinary = args.gltf_nonbinary, overwrite = args.overwrite, dest_dir = args.dest_dir)
+        else:
+            print("{} does not exist".format(args.pkg_filename))
     else:
+        # Set current directory
+        if getattr(sys, 'frozen', False):
+            os.chdir(os.path.dirname(sys.executable))
+        else:
+            os.chdir(os.path.abspath(os.path.dirname(__file__)))
         pkg_files = glob.glob('*.pkg')
         for i in range(len(pkg_files)):
             process_pkg(pkg_files[i])
