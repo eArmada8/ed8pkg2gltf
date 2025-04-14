@@ -3756,7 +3756,7 @@ def process_pkg(pkg_name, partialmaps = partial_vgmaps_default, allbuffers = Fal
             if not os.path.exists(dest_dir):
                 os.makedirs(dest_dir, exist_ok=True)
             allowed_write_extensions = ['.glb', '.json', '.dds', '.xml', '.phyre']
-            storage_media = TSpecialOverlayMedia(os.path.realpath(pkg_name),  allowed_write_extensions)
+            storage_media = TSpecialOverlayMedia(os.path.realpath(pkg_name), allowed_write_extensions)
             items = []
 
             def list_callback(item):
