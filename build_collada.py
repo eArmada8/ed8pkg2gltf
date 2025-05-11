@@ -1240,7 +1240,6 @@ def write_processing_batch_file (models, animation_metadata = {}, processor = 'C
     elif compression_level >= 4:
         compflag = '-l '
     xml_info, textures = asset_info_from_xml(pkg_name+'/asset_D3D11.xml')
-    image_copy_text = ''
     batch_file = ShellScriptBuilder()
     for i in range(len(metadata_list)):
         name = metadata_list[i]['name']
@@ -1291,13 +1290,12 @@ def write_texture_processing_batch_file (asset_xml, xml_num = 0, processor = 'CS
     images = ["{0}/{1}".format(textures[x]['dae_path'],x).replace('/','\\') for x in textures]
     for i in range(len(images)):
         img = batch_file.normalize_path(images[i])
-        cmd = '{0} -fi="{1}" -platform="D3D11" -write=all\n'.format(processor, img)
+        cmd = '{0} -fi="{1}" -platform="D3D11" -write=all'.format(processor, img)
         batch_file.run_exe(cmd)
-    image_copy_text = ''
     image_folders = [x.replace('/','\\') for x in sorted(list(set([textures[x]['dae_path'] for x in textures])))]
     if len(image_folders) > 0:
         for folder in image_folders:
-            batch_file.copy_file('D3D11{}*.*'.format(folder), os.path.dirname(asset_xml))
+            batch_file.copy_file('D3D11/{}/*.*'.format(folder), os.path.dirname(asset_xml))
     batch_file.run_raw('python write_pkg.py {0}-o {1}\n'.format(compflag, os.path.dirname(asset_xml)))
     batch_file.write_script('RunMe{}'.format(xml_num if xml_num else ''))
     return
