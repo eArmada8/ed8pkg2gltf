@@ -1222,7 +1222,7 @@ def write_texture_processing_batch_file (asset_xml, xml_num = 0, processor = 'CS
             image_copy_text += 'copy D3D11\{0}\*.* {1}\r\n'.format(folder, os.path.dirname(asset_xml))
     batch_file = '@ECHO OFF\r\nset "SCE_PHYRE=%cd%"\r\n'
     for i in range(len(images)):
-        batch_file += '{0} -fi="{1}" -platform="D3D11" -write=all\r\n'.format(images[i], processor)
+        batch_file += '{0} -fi="{1}" -platform="D3D11" -write=all\r\n'.format(processor, images[i])
     batch_file += image_copy_text + 'python write_pkg.py {0}-o {1}\r\n'.format(compflag, os.path.dirname(asset_xml))
     with open('RunMe{}.bat'.format(xml_num if xml_num else ''), 'wb') as f:
         f.write(batch_file.encode('utf-8'))
