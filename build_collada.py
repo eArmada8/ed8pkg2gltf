@@ -283,13 +283,13 @@ def add_materials (collada, metadata, relative_path = '../../..', forward_render
                 material_switch_entry = ET.SubElement(material_switch_list, 'material_switch')
                 material_switch_entry.set("name", material_switch)
                 material_switch_entry.set("material_switch_value", materials[material]['shaderSwitches'][material_switch])
-            for i in range(len(all_shader_switches)):
-                material_switch_entry = ET.SubElement(material_switch_list, 'material_switch')
-                material_switch_entry.set("name", all_shader_switches[i])
-                if all_shader_switches[i] == current_shader_switch:
-                    material_switch_entry.set("material_switch_value", "1")
-                else:
-                    material_switch_entry.set("material_switch_value", "0")
+        for i in range(len(all_shader_switches)):
+            material_switch_entry = ET.SubElement(material_switch_list, 'material_switch')
+            material_switch_entry.set("name", all_shader_switches[i])
+            if all_shader_switches[i] == current_shader_switch:
+                material_switch_entry.set("material_switch_value", "1")
+            else:
+                material_switch_entry.set("material_switch_value", "0")
         forwardrendertechnique = ET.SubElement(profile_HLSL, 'technique')
         if forward_render == True:
             forwardrendertechnique.set("sid", "ForwardRender")
@@ -583,7 +583,6 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has
                 blendweights = [x['Buffer'] for x in submesh["vb"] if x['SemanticName'] == 'BLENDWEIGHT'][0]
             else:
                 blendweights = [x['Buffer'] for x in submesh["vb"] if x['SemanticName'] == 'BLENDWEIGHTS'][0]
-
             blendindices = [x['Buffer'] for x in submesh["vb"] if x['SemanticName'] == 'BLENDINDICES'][0]
             blendjoints = dict(joint_list)
             new_weights = []
@@ -1124,7 +1123,7 @@ def write_asset_xml (metadata_list):
         os.mkdir(metadata_list[0]['pkg_name'])
     filename = '{0}/asset_D3D11.xml'.format(metadata_list[0]['pkg_name'])
     already_appended = []
-    asset_xml = '<?xml version="1.0" encoding="utf-8"?>\n<fassets>\n'
+    asset_xml = '<?xml version="1.0" encoding="utf-8"?>\r\n<fassets>\r\n'
     for i in range(len(metadata_list)):
         if metadata_list[i]['name'] in xml_info:
             current_xml_asset = xml_info[metadata_list[i]['name']]['asset_symbol']
@@ -1136,7 +1135,7 @@ def write_asset_xml (metadata_list):
         metadata_images = sorted(list(set([x for y in metadata_list[i]['materials'] for x in metadata_list[i]['materials'][y]['shaderTextures'].values()])))
         for j in range(len(metadata_images)):
             if metadata_images[j] not in already_appended:
-                images.append('\t\t<cluster path="data/D3D11/{0}.phyre" type="p_texture" />\n'.format(metadata_images[j]))
+                images.append('\t\t<cluster path="data/D3D11/{0}.phyre" type="p_texture" />\r\n'.format(metadata_images[j]))
                 already_appended.append(metadata_images[j])
         images.sort()
         shaders = []
@@ -1144,14 +1143,14 @@ def write_asset_xml (metadata_list):
             for shader_type in ['shader','skinned_shader','vertex_color_shader','skinned_vertex_color_shader']:
                 if shader_type in metadata_list[i]['materials'][material] and metadata_list[i]['materials'][material][shader_type] not in already_appended:
                     shader_name = metadata_list[i]['materials'][material][shader_type]
-                    shaders.append('\t\t<cluster path="data/D3D11/{0}.phyre" type="p_fx" />\n'.format(shader_name))
+                    shaders.append('\t\t<cluster path="data/D3D11/{0}.phyre" type="p_fx" />\r\n'.format(shader_name))
                     already_appended.append(metadata_list[i]['materials'][material]['shader'])
         shaders.sort()
-        asset_xml += '\t<asset symbol="{0}">\n'.format(current_xml_asset)
-        asset_xml += '\t\t<cluster path="data/D3D11/{0}/{1}.dae.phyre" type="p_collada" />\n'.format(current_dae_path, metadata_list[i]['name'])
+        asset_xml += '\t<asset symbol="{0}">\r\n'.format(current_xml_asset)
+        asset_xml += '\t\t<cluster path="data/D3D11/{0}/{1}.dae.phyre" type="p_collada" />\r\n'.format(current_dae_path, metadata_list[i]['name'])
         asset_xml += ''.join(images) + ''.join(shaders)
-        asset_xml += '\t</asset>\n'
-    asset_xml += '</fassets>\n'
+        asset_xml += '\t</asset>\r\n'
+    asset_xml += '</fassets>\r\n'
     with open(filename, 'wb') as f:
         f.write(asset_xml.encode('utf-8'))
     return
@@ -1280,21 +1279,21 @@ def write_processing_batch_file (models, animation_metadata = {}, processor = 'C
     return True
 
 def write_texture_processing_batch_file (asset_xml, xml_num = 0, processor = 'CSIVAssetImportTool.exe'):
+    compflag = ''
     if os.path.exists('compression.json'):
         compression_level = read_struct_from_json('compression.json')['compression']
-    compflag = ''
-    if compression_level == 1:
-        compflag = '-lz '
-    elif compression_level >= 4:
-        compflag = '-l '
+        if compression_level == 1:
+            compflag = '-lz '
+        elif compression_level >= 4:
+            compflag = '-l '
     daes, textures = asset_info_from_xml(asset_xml)
     batch_file = ShellScriptBuilder()
+    images = ["{0}/{1}".format(textures[x]['dae_path'],x).replace('/','\\') for x in textures]
     for i in range(len(images)):
         img = batch_file.normalize_path(images[i])
         cmd = '{0} -fi="{1}" -platform="D3D11" -write=all\n'.format(processor, img)
         batch_file.run_exe(cmd)
     image_copy_text = ''
-    images = ["{0}/{1}".format(textures[x]['dae_path'],x).replace('/','\\') for x in textures]
     image_folders = [x.replace('/','\\') for x in sorted(list(set([textures[x]['dae_path'] for x in textures])))]
     if len(image_folders) > 0:
         for folder in image_folders:
@@ -1496,7 +1495,7 @@ if __name__ == '__main__':
     if len(models) > 0 or ('animations' in animation_metadata and len(animation_metadata['animations']) > 0):
         print("Writing asset_D3D11.xml...")
         write_asset_xml(metadata_list)
-        print("Writing RunMe.sh.")
+        print("Writing RunMe.")
         write_processing_batch_file(models, animation_metadata)
         if len(new_times) > 0:
             print("Warning!  There are animations where the start time do not match the metadata!  Ani script updates required.")
