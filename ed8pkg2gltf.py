@@ -2805,7 +2805,7 @@ def gltf_export(g, cluster_mesh_info, cluster_info, cluster_header, pdatablock_l
         metadata_json_name = pkg_name + os.sep + "metadata_{0}.json".format(str(item_num).zfill(2))
         physics_json_name = pkg_name + os.sep + "physics_data_{0}.json".format(str(item_num).zfill(2))
         mesh_folder_name = pkg_name + os.sep + "meshes_{0}".format(str(item_num).zfill(2))
-    metadata_json = {'name': cluster_mesh_info.filename.split('.', 1)[0], 'pkg_name': pkg_name}
+    metadata_json = {'name': cluster_mesh_info.filename.split('.', 1)[0], 'pkg_name': os.path.basename(pkg_name)}
     metadata_json['compression'] = cluster_mesh_info.storage_media.storage2.compression_flag
     if not os.path.exists(mesh_folder_name) and 'PMeshInstance' in cluster_mesh_info.data_instances_by_class:
         os.mkdir(mesh_folder_name)
