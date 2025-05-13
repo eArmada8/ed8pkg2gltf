@@ -1162,7 +1162,7 @@ class ShellScriptBuilder:
     def __init__(self):
         # assume we are on windows if /proc/self doesn't exist
         self.windows = not os.path.exists("/proc/self")
-        self.buffer = '@ECHO OFF\r\nset "SCE_PHYRE=%cd%"\r\n' if self.windows else "export SCE_PHYRE=$(pwd)\n"
+        self.buffer = '@ECHO OFF\r\nset "SCE_PHYRE=%cd%"\r\n' if self.windows else "set -eu\nexport SCE_PHYRE=$(pwd)\n"
 
     def copy_file(self, src, dst, overwrite = False):
         src = self.normalize_path(src)
@@ -1261,10 +1261,10 @@ def write_processing_batch_file (models, animation_metadata = {}, processor = 'C
                 dae_path = xml_info[animation]['dae_path']
             else:
                 dae_path = 'chr/chr/{0}'.format(animation.split('_')[0])
-            path = batch_file.normalize(dae_path + '/' + animation + ".dae")
-            cmd = '{0} -fi="{1}" -platform="D3D11" -write=all\n'.format(processor, path)
+            path = batch_file.normalize_path(dae_path + '/' + animation + ".dae")
+            cmd = '{0} -fi="{1}" -platform="D3D11" -write=all'.format(processor, path)
             batch_file.run_exe(cmd)
-            batch_file.copy_file('D3D11/{0}.phyre'.format(dae_patpath), pkg_name)
+            batch_file.copy_file('D3D11/{0}/{1}.dae.phyre'.format(dae_path, animation), pkg_name)
     image_folders = sorted(list(set([os.path.dirname(x).replace('/',os.sep) for y in [x['shaderTextures']\
         for y in metadata_list for x in y['materials'].values()] for x in y.values()])))
     if len(image_folders) > 0:
