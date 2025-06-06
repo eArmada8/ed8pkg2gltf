@@ -12,7 +12,7 @@ try:
 except ModuleNotFoundError as e:
     print("Python module missing! {}".format(e.msg))
     input("Press Enter to abort.")
-    raise   
+    raise
 
 #Does not support sparse
 def read_gltf_stream (gltf, accessor_num):
@@ -1118,7 +1118,7 @@ def write_asset_xml (metadata_list):
         print("FileNotFoundError: Attempted to read {} but it is not present!".format(metadata_list[0]['pkg_name']+'/asset_D3D11.xml'))
         print("Autobuild configuration not possible.")
         input("Press Enter to abort.")
-        raise    
+        raise
     if not os.path.exists(metadata_list[0]['pkg_name']):
         os.mkdir(metadata_list[0]['pkg_name'])
     filename = '{0}/asset_D3D11.xml'.format(metadata_list[0]['pkg_name'])
@@ -1155,6 +1155,73 @@ def write_asset_xml (metadata_list):
         f.write(asset_xml.encode('utf-8'))
     return
 
+# ShellScriptBuilder is an abstraction to allow building shell
+# scripts without having to think about operating system specifics.
+class ShellScriptBuilder:
+
+    def __init__(self):
+        # assume we are on windows if /proc/self doesn't exist
+        self.windows = not os.path.exists("/proc/self")
+        self.buffer = '@ECHO OFF\r\nset "SCE_PHYRE=%cd%"\r\n' if self.windows else "set -eu\nexport SCE_PHYRE=$(pwd)\n"
+
+    def copy_file(self, src, dst, overwrite = False):
+        src = self.normalize_path(src)
+        dst = self.normalize_path(dst)
+        if self.windows:
+            flags = "/Y " if overwrite else ""
+            self.buffer += "copy {}{} {}\r\n".format(flags, src, dst)
+        else:
+            flags = "-f " if overwrite else ""
+            self.buffer += "cp {}{} {}\n".format(flags, src, dst)
+        return
+
+    def run_exe(self, cmd_line):
+        if self.windows:
+            self.buffer += cmd_line + "\r\n"
+        else:
+            # wine is quite verbose. discard output.
+            self.buffer += "wine " + cmd_line + " &> /dev/null\n"
+        return
+
+    def delete_file(self, file):
+        file = self.normalize_path(file)
+        if self.windows:
+            self.buffer += "del {}\r\n".format(file)
+        else:
+            self.buffer += "rm {}\n".format(file)
+        return
+
+    def move_file(self, src, dst):
+        src = self.normalize_path(src)
+        dst = self.normalize_path(dst)
+        if self.windows:
+            self.buffer += "move {} {}\r\n".format(src, dst)
+        else:
+            self.buffer += "mv {} {}\n".format(src, dst)
+        return
+
+    def run_raw(self, cmd_line):
+        if self.windows:
+            self.buffer += "{}\r\n".format(cmd_line)
+        else:
+            self.buffer += "{}\n".format(cmd_line)
+        return
+
+    # accepts a windows or unix path and returns a platform specific path
+    def normalize_path(self, path):
+        path = path.replace('/',os.sep)
+        path = path.replace('\\',os.sep)
+        return path
+
+    def write_script(self, path):
+        path = self.normalize_path(path)
+        ext = ".bat" if self.windows else ".sh"
+        with open(path+ext, 'wb') as f:
+            f.write(self.buffer.encode('utf-8'))
+            if not self.windows:
+                os.chmod('RunMe.sh', 0o755)
+        return
+
 def write_processing_batch_file (models, animation_metadata = {}, processor = 'CSIVAssetImportTool.exe'):
     compression_level = 0
     metadata_list = [read_struct_from_json(x) for x in models] # A little inefficient but safer
@@ -1173,59 +1240,64 @@ def write_processing_batch_file (models, animation_metadata = {}, processor = 'C
     elif compression_level >= 4:
         compflag = '-l '
     xml_info, textures = asset_info_from_xml(pkg_name+'/asset_D3D11.xml')
-    image_copy_text = ''
-    image_folders = sorted(list(set([os.path.dirname(x).replace('/','\\') for y in [x['shaderTextures']\
-        for y in metadata_list for x in y['materials'].values()] for x in y.values()])))
-    if len(image_folders) > 0:
-        for folder in image_folders:
-            image_copy_text += 'copy D3D11\{0}\*.* {1}\r\n'.format(folder, metadata_list[0]['pkg_name'])
-    batch_file = '@ECHO OFF\r\nset "SCE_PHYRE=%cd%"\r\n'
+    batch_file = ShellScriptBuilder()
     for i in range(len(metadata_list)):
-        batch_file += '''{0} -fi="{1}\{2}.dae" -platform="D3D11" -write=all
-PhyreDummyShaderCreator.exe D3D11\{1}\{2}.dae.phyre
-copy D3D11\{1}\{2}.dae.phyre .
-python replace_shader_references.py {3}
-del {2}.dae.phyre.bak
-copy /Y .\{2}.dae.phyre D3D11\{1}
-move {2}.dae.phyre {4}'''.format(processor, xml_info[metadata_list[i]['name']]['dae_path'].replace('/','\\'),\
-        metadata_list[i]['name'], models[i], pkg_name) + '\r\n'
+        name = metadata_list[i]['name']
+        dae_path = xml_info[name]['dae_path']
+        path = batch_file.normalize_path('{0}/{1}.dae'.format(dae_path, name))
+        processor_cmd = '{0} -fi="{1}" -platform="D3D11" -write=all'.format(processor, path)
+        batch_file.run_exe(processor_cmd)
+        path = batch_file.normalize_path('D3D11/{0}/{1}.dae.phyre'.format(dae_path, name))
+        batch_file.run_exe('PhyreDummyShaderCreator.exe {0}'.format(path))
+        batch_file.copy_file(path, '.')
+        batch_file.run_raw('python replace_shader_references.py {0}'.format(models[i]))
+        batch_file.delete_file('{0}.dae.phyre.bak'.format(name))
+        path = '{0}.dae.phyre'.format(name)
+        batch_file.copy_file(path, 'D3D11/{0}'.format(dae_path), overwrite = True)
+        batch_file.move_file(path, pkg_name)
     if 'animations' in animation_metadata:
         for animation in animation_metadata['animations']:
             if animation in xml_info:
                 dae_path = xml_info[animation]['dae_path']
             else:
                 dae_path = 'chr/chr/{0}'.format(animation.split('_')[0])
-            batch_file += '{0} -fi="{1}" -platform="D3D11" -write=all\r\n'.format(processor,\
-                dae_path + '/' + animation + ".dae")
-            batch_file += 'copy D3D11\{0}\{1}.dae.phyre {2}\r\n'.format(dae_path.replace('/','\\'), animation, pkg_name)
-    batch_file += image_copy_text + 'python write_pkg.py {0}-o {1}\r\n'.format(compflag, pkg_name)
+            path = batch_file.normalize_path(dae_path + '/' + animation + ".dae")
+            cmd = '{0} -fi="{1}" -platform="D3D11" -write=all'.format(processor, path)
+            batch_file.run_exe(cmd)
+            batch_file.copy_file('D3D11/{0}/{1}.dae.phyre'.format(dae_path, animation), pkg_name)
+    image_folders = sorted(list(set([os.path.dirname(x).replace('/',os.sep) for y in [x['shaderTextures']\
+        for y in metadata_list for x in y['materials'].values()] for x in y.values()])))
+    if len(image_folders) > 0:
+        for folder in image_folders:
+            batch_file.copy_file('D3D11/{0}/*.*'.format(folder), metadata_list[0]['pkg_name'])
+    batch_file.run_raw('python write_pkg.py {0}-o {1}'.format(compflag, pkg_name))
     if len(metadata_list) > 0:
-        batch_file += 'del *.fx\r\ndel *.cgfx\r\n'
-    with open('RunMe.bat', 'wb') as f:
-        f.write(batch_file.encode('utf-8'))
+        batch_file.delete_file('*.fx')
+        batch_file.delete_file('*.cgfx')
+    batch_file.write_script('RunMe')
     return True
 
 def write_texture_processing_batch_file (asset_xml, xml_num = 0, processor = 'CSIVAssetImportTool.exe'):
+    compflag = ''
     if os.path.exists('compression.json'):
         compression_level = read_struct_from_json('compression.json')['compression']
-    compflag = ''
-    if compression_level == 1:
-        compflag = '-lz '
-    elif compression_level >= 4:
-        compflag = '-l '
+        if compression_level == 1:
+            compflag = '-lz '
+        elif compression_level >= 4:
+            compflag = '-l '
     daes, textures = asset_info_from_xml(asset_xml)
-    image_copy_text = ''
+    batch_file = ShellScriptBuilder()
     images = ["{0}/{1}".format(textures[x]['dae_path'],x).replace('/','\\') for x in textures]
+    for i in range(len(images)):
+        img = batch_file.normalize_path(images[i])
+        cmd = '{0} -fi="{1}" -platform="D3D11" -write=all'.format(processor, img)
+        batch_file.run_exe(cmd)
     image_folders = [x.replace('/','\\') for x in sorted(list(set([textures[x]['dae_path'] for x in textures])))]
     if len(image_folders) > 0:
         for folder in image_folders:
-            image_copy_text += 'copy D3D11\{0}\*.* {1}\r\n'.format(folder, os.path.dirname(asset_xml))
-    batch_file = '@ECHO OFF\r\nset "SCE_PHYRE=%cd%"\r\n'
-    for i in range(len(images)):
-        batch_file += '{0} -fi="{1}" -platform="D3D11" -write=all\r\n'.format(images[i], processor)
-    batch_file += image_copy_text + 'python write_pkg.py {0}-o {1}\r\n'.format(compflag, os.path.dirname(asset_xml))
-    with open('RunMe{}.bat'.format(xml_num if xml_num else ''), 'wb') as f:
-        f.write(batch_file.encode('utf-8'))
+            batch_file.copy_file('D3D11/{}/*.*'.format(folder), os.path.dirname(asset_xml))
+    batch_file.run_raw('python write_pkg.py {0}-o {1}\n'.format(compflag, os.path.dirname(asset_xml)))
+    batch_file.write_script('RunMe{}'.format(xml_num if xml_num else ''))
     return
 
 def write_collada (collada, full_dae_path):
@@ -1315,7 +1387,7 @@ def build_collada (metadata_name, animation_metadata = {}):
             physics_present = True
         meshes_path = 'meshes' + metadata_name.split('.json')[0].split('metadata')[-1]
         submeshes = []
-        meshes = [x.split(meshes_path+'\\')[1].split('.fmt')[0] for x in glob.glob(meshes_path+'/*.fmt')]
+        meshes = [x.split(meshes_path+os.sep)[1].split('.fmt')[0] for x in glob.glob(meshes_path+'/*.fmt')]
         for filename in meshes:
             try:
                 print("Reading submesh {0}...".format(filename))
@@ -1421,7 +1493,7 @@ if __name__ == '__main__':
     if len(models) > 0 or ('animations' in animation_metadata and len(animation_metadata['animations']) > 0):
         print("Writing asset_D3D11.xml...")
         write_asset_xml(metadata_list)
-        print("Writing RunMe.bat.")
+        print("Writing RunMe.")
         write_processing_batch_file(models, animation_metadata)
         if len(new_times) > 0:
             print("Warning!  There are animations where the start time do not match the metadata!  Ani script updates required.")
