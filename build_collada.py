@@ -1176,6 +1176,12 @@ class ShellScriptBuilder:
     def run_exe(self, cmd_line):
         if self.windows:
             self.buffer += cmd_line + "\r\n"
+            self.buffer += '''if %ERRORLEVEL% NEQ 0 (
+    echo command failed: {}
+    pause
+    goto :EOF
+)
+'''.format(cmd_line)
         else:
             # wine is quite verbose. discard output.
             self.buffer += "wine " + cmd_line + " &> /dev/null\n"
