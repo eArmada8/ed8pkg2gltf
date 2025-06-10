@@ -816,7 +816,6 @@ def add_physics (collada, physics_metadata):
         physics_model_element.set("id", model)
         instance_physics_model = ET.SubElement(physics_scene, 'instance_physics_model')
         instance_physics_model.set('url', '#' + model)
-        j = 0 # Counter for dynamic
         for body_name in physics_metadata[model]['rigid_bodies']:
             body = physics_metadata[model]['rigid_bodies'][body_name]
             physics_rigid_body = ET.SubElement(physics_model_element, 'rigid_body')
@@ -826,7 +825,7 @@ def add_physics (collada, physics_metadata):
             technique_common = ET.SubElement(physics_rigid_body, 'technique_common')
             dynamic = ET.SubElement(technique_common, 'dynamic')
             dynamic.set("sid", 'dynamic')
-            dynamic.text = "{0}".format(j)
+            dynamic.text = "0"
             mass = ET.SubElement(technique_common, 'mass')
             mass.text = "{0}".format(body['parameters']['m_mass'])
             mass_frame = ET.SubElement(technique_common, 'mass_frame')
@@ -880,7 +879,7 @@ def add_physics (collada, physics_metadata):
             velocity = ET.SubElement(technique_common, 'velocity')
             velocity.text = "{0}".format(" ".join([str(x) for x in body['parameters']['m_initialLinearVelocity']]))
             dynamic = ET.SubElement(technique_common, 'dynamic')
-            dynamic.text = "{0}".format(j)
+            dynamic.text = "0"
             mass = ET.SubElement(technique_common, 'mass')
             mass.text = "{0}".format(body['parameters']['m_mass'])
             mass_frame = ET.SubElement(technique_common, 'mass_frame')
@@ -893,7 +892,6 @@ def add_physics (collada, physics_metadata):
             technique.set("profile", 'MAYA')
             damping = ET.SubElement(technique, 'damping')
             damping.text = "{0}".format(body['parameters']['m_linearDamping']) # Or should this be m_angularDamping?
-            j += 1
     return(collada)
 
 # We can maintain ability to extract multiple indices, although phyreEngine only has single animations so i=0 always
