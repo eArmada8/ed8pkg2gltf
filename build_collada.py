@@ -892,7 +892,6 @@ def add_physics (collada, physics_metadata):
             technique.set("profile", 'MAYA')
             damping = ET.SubElement(technique, 'damping')
             damping.text = "{0}".format(body['parameters']['m_linearDamping']) # Or should this be m_angularDamping?
-            j += 1
     return(collada)
 
 # We can maintain ability to extract multiple indices, although phyreEngine only has single animations so i=0 always
