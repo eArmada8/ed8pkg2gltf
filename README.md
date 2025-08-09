@@ -7,7 +7,7 @@ This a tool set for making mods of character models in Trails of Cold Steel III,
 Please see the [wiki](https://github.com/eArmada8/ed8pkg2gltf/wiki), and the detailed documentation below.
 
 ## Credits:
-The original phyre asset decompiler is written by Julian Uy (github.com/uyjulian), and I have only made modifications.  I wrote the remaining tools, and am very thankful to Arc, My Name, uyjulian, TwnKey, AdmiralCurtiss, Kyuuhachi and the Kiseki modding discord for their brilliant work and for sharing that work so freely.  I am especially thankful to Arc for sharing expertise in the compilation process and for spending many evenings helping me debug!  I am also very thankful to My Name for sharing models and knowledge as well.
+The original phyre asset decompiler is written by Julian Uy (github.com/uyjulian), and I have only made modifications.  I wrote the remaining tools, and am very thankful to Arc, My Name, uyjulian, TwnKey, AdmiralCurtiss, Kyuuhachi, bernd7055 and the Kiseki modding discord for their brilliant work and for sharing that work so freely.  I am especially thankful to Arc for sharing expertise in the compilation process and for spending many evenings helping me debug!  I am also very thankful to My Name for sharing models and knowledge as well.
 
 ## Requirements:
 1. Python 3.9 or newer is required for use of this script.  It is free from the Microsoft Store, for Windows users.  For Linux users, please consult your distro.
