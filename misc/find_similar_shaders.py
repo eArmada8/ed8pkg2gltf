@@ -109,7 +109,7 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--shader', type=str, help="Shader to find, e.g.ed8.fx#CE03DCE5DFEF5F7C4FB6937519B03034")
     parser.add_argument('-g', '--game', type=str, help="Game in which to find a similar shader, any of {cs1,cs2,cs3,cs4,cs5}")
     parser.add_argument('-it', '--ignore_tex_slots', help="Normal sorting prioritizes shaders with similar texture mapping, this option purely sorts by hash", action="store_false")
-    parser.add_argument('-nt', '--no_new_tex_slots', help="Remove matches that differ in texture map slots (overrides -ip)", action="store_true")
+    parser.add_argument('-nt', '--no_new_tex_slots', help="Remove matches that differ in texture map slots (overrides -it)", action="store_true")
     parser.add_argument('-nr', '--no-report', action='store_false', dest='write_file', help="prints a single most similar shader to stdout (any if there are multiple)")
     args = parser.parse_args()
 
