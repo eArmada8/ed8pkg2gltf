@@ -13,12 +13,13 @@ import argparse
 csv_file = 'all_shaders.csv'
 
 class Shader_db:
-    def __init__(self, shader_db_csv, report_file = 'report.txt'):
+    def __init__(self, shader_db_csv, report_file = 'report.txt', prioritize_same_textures = True):
         self.shader_db_csv = shader_db_csv
         self.report_file = report_file
         self.shader_array = self.read_shader_csv()
         self.shader_switches = self.shader_array[0][6:]
         self.shader_sig = {x[0]:''.join(x[6:]) for x in self.shader_array[1:]}
+        self.prioritize_same_textures = prioritize_same_textures
         self.diffs = {}
         self.restriction = ''
         self.restriction_column = None
@@ -52,6 +53,12 @@ class Shader_db:
         diff_val = sorted(list(set(shader_diff.values())))
         self.diffs = {diff_val[i]:{x:self.diff(shader,x) for x in shader_diff if shader_diff[x] == diff_val[i]}\
             for i in range(len(diff_val))}
+        if self.prioritize_same_textures == True:
+            for i in diff_val:
+                # Prioritize shaders without changes in textures by moving them to the top of each list
+                sorted_list = {x:self.diffs[i][x] for x in self.diffs[i] if not any([True if 'MAPPING' in x else False for x in self.diffs[i][x]])}
+                sorted_list.update({x:self.diffs[i][x] for x in self.diffs[i] if any([True if 'MAPPING' in x else False for x in self.diffs[i][x]])})
+                self.diffs[i] = sorted_list
 
     def format_report(self, shader):
         self.report = 'Original Shader: {0}\n'.format(shader)
@@ -98,7 +105,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if os.path.exists(csv_file):
-        shader_db = Shader_db(csv_file)
+        shader_db = Shader_db(csv_file, 'report.txt', prioritize_same_textures = True)
         shader = args.shader
         if not shader:
             shader = input("Please enter name of shader to analyze: ")
