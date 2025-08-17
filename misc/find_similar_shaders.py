@@ -13,13 +13,14 @@ import argparse
 csv_file = 'all_shaders.csv'
 
 class Shader_db:
-    def __init__(self, shader_db_csv, report_file = 'report.txt', prioritize_same_textures = True):
+    def __init__(self, shader_db_csv, report_file = 'report.txt', prioritize_same_tex_slots = True, no_new_tex_slots = False):
         self.shader_db_csv = shader_db_csv
         self.report_file = report_file
         self.shader_array = self.read_shader_csv()
         self.shader_switches = self.shader_array[0][6:]
         self.shader_sig = {x[0]:''.join(x[6:]) for x in self.shader_array[1:]}
-        self.prioritize_same_textures = prioritize_same_textures
+        self.prioritize_same_tex_slots = prioritize_same_tex_slots
+        self.no_new_tex_slots = no_new_tex_slots
         self.diffs = {}
         self.restriction = ''
         self.restriction_column = None
@@ -53,11 +54,17 @@ class Shader_db:
         diff_val = sorted(list(set(shader_diff.values())))
         self.diffs = {diff_val[i]:{x:self.diff(shader,x) for x in shader_diff if shader_diff[x] == diff_val[i]}\
             for i in range(len(diff_val))}
-        if self.prioritize_same_textures == True:
+        if self.prioritize_same_tex_slots == True or self.no_new_tex_slots == True:
             for i in diff_val:
                 # Prioritize shaders without changes in textures by moving them to the top of each list
-                sorted_list = {x:self.diffs[i][x] for x in self.diffs[i] if not any([True if 'MAPPING' in x else False for x in self.diffs[i][x]])}
-                sorted_list.update({x:self.diffs[i][x] for x in self.diffs[i] if any([True if 'MAPPING' in x else False for x in self.diffs[i][x]])})
+                sorted_list = {x:self.diffs[i][x] for x in self.diffs[i]
+                    if not any([True if 'MAPPING' in y else False for y in self.diffs[i][x]])}
+                if self.no_new_tex_slots == True:
+                    sorted_list.update({x:self.diffs[i][x] for x in self.diffs[i]
+                        if any([True if 'MAPPING' in y and self.diffs[i][x][y] == '0' else False for y in self.diffs[i][x]])})
+                else:
+                    sorted_list.update({x:self.diffs[i][x] for x in self.diffs[i]
+                        if any([True if 'MAPPING' in y else False for y in self.diffs[i][x]])})
                 self.diffs[i] = sorted_list
 
     def format_report(self, shader):
@@ -99,13 +106,15 @@ if __name__ == "__main__":
     # Set current directory
     os.chdir(os.path.abspath(os.path.dirname(__file__)))
     parser = argparse.ArgumentParser()
-    parser.add_argument('-s', '--shader', type=str, help="shader to find, e.g.ed8.fx#CE03DCE5DFEF5F7C4FB6937519B03034")
-    parser.add_argument('-g', '--game', type=str, help="game in which to find a similar shader, any of {cs1,cs2,cs3,cs4,cs5}")
-    parser.add_argument('--no-report', action='store_false', dest='write_file', help="prints a single most similar shader to stdout (any if there are multiple)")
+    parser.add_argument('-s', '--shader', type=str, help="Shader to find, e.g.ed8.fx#CE03DCE5DFEF5F7C4FB6937519B03034")
+    parser.add_argument('-g', '--game', type=str, help="Game in which to find a similar shader, any of {cs1,cs2,cs3,cs4,cs5}")
+    parser.add_argument('-it', '--ignore_tex_slots', help="Normal sorting prioritizes shaders with similar texture mapping, this option purely sorts by hash", action="store_false")
+    parser.add_argument('-nt', '--no_new_tex_slots', help="Remove matches that differ in texture map slots (overrides -ip)", action="store_true")
+    parser.add_argument('-nr', '--no-report', action='store_false', dest='write_file', help="prints a single most similar shader to stdout (any if there are multiple)")
     args = parser.parse_args()
 
     if os.path.exists(csv_file):
-        shader_db = Shader_db(csv_file, 'report.txt', prioritize_same_textures = True)
+        shader_db = Shader_db(csv_file, 'report.txt', prioritize_same_tex_slots = args.ignore_tex_slots, no_new_tex_slots = args.no_new_tex_slots)
         shader = args.shader
         if not shader:
             shader = input("Please enter name of shader to analyze: ")
