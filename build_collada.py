@@ -4,7 +4,7 @@
 # GitHub eArmada8/ed8pkg2gltf
 
 try:
-    import os, glob, numpy, json, io, sys, xml.dom.minidom
+    import os, glob, numpy, json, re, io, sys, xml.dom.minidom
     import xml.etree.ElementTree as ET
     from pyquaternion import Quaternion
     from pygltflib import GLTF2
@@ -750,8 +750,15 @@ def add_geometries_and_controllers (collada, submeshes, skeleton, materials, has
             controller_skeleton = ET.SubElement(instance_geom_controller, 'skeleton')
             controller_skeleton.text = '#' + skeleton_name # Should always be 'up_point' or its equivalent!
         else:
-            if meshname[-3] == '_' and meshname[-2:].isdigit() and len([x for x in collada.iter() if 'sid' in x.attrib and x.attrib['sid'] == meshname[:-3]]) > 0:
-                mesh_node = add_empty_node (meshname+'_node', [x for x in collada.iter() if 'sid' in x.attrib and x.attrib['sid'] == meshname[:-3]][0])
+            if len(parent_node) > 0 and re.findall('^C[A-Z]0[0-9]$', meshname):
+                mesh_node = parent_node[0]
+            elif meshname[-3] == '_' and meshname[-2:].isdigit()\
+                and len([x for x in collada.iter() if 'sid' in x.attrib and x.attrib['sid'] == meshname[:-3]]) > 0:
+                parent_node = [x for x in collada.iter() if 'sid' in x.attrib and x.attrib['sid'] == meshname[:-3]]
+                if len(parent_node) > 0 and re.findall('^C[A-Z]0[0-9]$', meshname[:-3]):
+                    mesh_node = parent_node[0]
+                else:
+                    mesh_node = add_empty_node (meshname+'_node', [x for x in collada.iter() if 'sid' in x.attrib and x.attrib['sid'] == meshname[:-3]][0])
             else:
                 mesh_node = add_empty_node (meshname+'_node', collada.find('library_visual_scenes')[0])
             instance_geom_controller = ET.SubElement(mesh_node, 'instance_geometry')
