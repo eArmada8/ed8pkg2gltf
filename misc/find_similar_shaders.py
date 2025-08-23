@@ -1,3 +1,12 @@
+# ED8 shader finder.  Give the filename of a shader e.g. 'ed8_chr.fx#43908C853D966A373118677862503A56'
+# and it will search the database (by default 'all_shaders.csv', set below) to generate a report
+# of the other switches, ranked by similarity.  Requires Python 3.10 or newer.
+#
+# Requires all_shaders.csv, obtain from
+# https://github.com/eArmada8/ed8pkg2gltf/raw/main/doc/game_transfer_img/all_shaders.csv
+#
+# GitHub eArmada8/ed8pkg2gltf
+
 import os, csv
 from typing import Dict
 import argparse
