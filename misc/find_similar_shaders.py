@@ -13,9 +13,6 @@ import argparse
 
 csv_file = 'all_shaders.csv'
 
-def is_texture_slot(switch: str) -> bool:
-    return "MAPPING" in switch or "MULTI_UV" in switch or "_MAP_ENABLED" in switch
-
 class Shader_db:
     def __init__(self, shader_db_csv, weights, report_file = 'report.txt'):
         self.shader_db_csv = shader_db_csv
@@ -56,9 +53,9 @@ class Shader_db:
         weight = 0
         for k,vs in diff.items():
             v = int(vs)
-            weights = self.weights['other_switch']
-            if is_texture_slot(k):
-                weights = self.weights['texture_slot']
+            weights = self.weights['default_weight']
+            if k in self.weights:
+                weights = self.weights[k]
             weight += weights['removed'] * (not v)
             weight += weights['added'] * v
         return weight
@@ -101,26 +98,27 @@ class Shader_db:
                     return
         return
 
-def parse_weight_dict(input: str) -> Dict[str, Dict[str, int]]:
+def parse_weight_dict(input_file: str | None) -> Dict[str, Dict[str, int]]:
     weights = {
-      "texture_slot": {
-        "added": 1,
-        "removed": 1,
-      },
-      "other_switch": {
+      "default_weight": {
         "added": 1,
         "removed": 1,
       },
     }
-    if input == "":
+    if not input_file:
         return weights
-    for w in input.split(','):
+    input = ""
+    with open(input_file, 'r') as f:
+        input = f.read()
+    for w in input.splitlines():
         m = w.split('=')
         if (len(m) != 3):
             raise argparse.ArgumentTypeError(
             f"Invalid weights dictionary format: '{input}'. "
             "Expected format: type=(added|removed)=weight"
             )
+        if m[0] not in weights:
+            weights[m[0]] = {}
         weights[m[0]][m[1]] = int(m[2])
     return weights
 
@@ -130,12 +128,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-s', '--shader', type=str, help="Shader to find, e.g.ed8.fx#CE03DCE5DFEF5F7C4FB6937519B03034")
     parser.add_argument('-g', '--game', type=str, help="Game in which to find a similar shader, any of {cs1,cs2,cs3,cs4,cs5}")
-    parser.add_argument('-w', '--weights', type=parse_weight_dict, help="A dictionary from switch type to, added or removed to custom weight. Unspecified weights will use 1 as default. Larger weight means larger difference. Available types are: [texture_slot, other_switch]. Format: type=(added|removed)=weight.", default = "")
+    parser.add_argument('-w', '--weights-file', type=str, help="Path to a file with a dictionary from switch to, added or removed to custom weight. Unspecified weights will use 1 as default. Larger weight means larger difference. Format: type=(added|removed)=weight.")
     parser.add_argument('-nr', '--no-report', action='store_false', dest='write_file', help="prints a single most similar shader to stdout (any if there are multiple)")
     args = parser.parse_args()
 
+    weights = parse_weight_dict(args.weights_file)
+
     if os.path.exists(csv_file):
-        shader_db = Shader_db(csv_file, args.weights, 'report.txt')
+        shader_db = Shader_db(csv_file, weights, 'report.txt')
         shader = args.shader
         if not shader:
             shader = input("Please enter name of shader to analyze: ")
